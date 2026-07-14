@@ -1,0 +1,26 @@
+[package]
+name = "ttx42"
+version = "0.1.0"
+edition = "2024"
+autoexamples = false
+license = "WTFPL"
+description = "Decode Level 1 broadcast teletext and render it as ANSI terminal cells"
+repository = "https://github.com/bitplane/ttx42"
+keywords = ["teletext", "ceefax", "ansi", "terminal", "retro"]
+categories = ["command-line-utilities", "encoding"]
+include = [
+    "/src/**",
+    "/examples/specimen.rs",
+    "/tests/**",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/LICENSE",
+    "/THIRD_PARTY_LICENSES.md",
+]
+
+[dependencies]
+
+[[example]]
+name = "specimen"
+path = "examples/specimen.rs"

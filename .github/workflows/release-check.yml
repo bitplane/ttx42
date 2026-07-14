@@ -1,0 +1,20 @@
+name: Release check
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all-targets
+      - run: cargo publish --dry-run
+      - run: cargo run --quiet --example specimen -- --wide > ttx42-specimen.ans
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ttx42-specimen
+          path: ttx42-specimen.ans
