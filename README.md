@@ -3,6 +3,9 @@
 Decode CEEFAX-era Level 1 broadcast teletext into a reusable 25×40 cell grid,
 then render it with ordinary ANSI terminal colours.
 
+![screen](screen.png)
+
+
 ```rust
 let page = ttx42::Page::from_raw(&bytes)?;
 let grid = ttx42::decode(&page, &ttx42::DecodeOptions::default());
