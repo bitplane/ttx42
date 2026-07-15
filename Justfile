@@ -1,5 +1,5 @@
 # Bump the minor version, verify it, commit, tag, and publish the refs.
-relase:
+release:
     #!/usr/bin/env bash
     set -euo pipefail
     status=$(git status --porcelain)
