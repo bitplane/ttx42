@@ -24,9 +24,9 @@ release:
     cargo fmt --check
     cargo clippy --all-targets -- -D warnings
     cargo test --all-targets
-    cargo publish --dry-run
     git add Cargo.toml Cargo.lock
     git commit -m "release $version"
+    cargo publish --dry-run
     git tag -a "$tag" -m "$tag"
     git push origin HEAD
     git push origin "$tag"
