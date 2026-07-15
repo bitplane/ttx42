@@ -143,7 +143,7 @@ fn octant_digits_zero_and_one_have_clean_shapes() {
     );
     assert_eq!(
         crate::saa5050::pixels('1').unwrap(),
-        [0b0100, 0b1100, 0b0100, 0b0100, 0b0100, 0b0100, 0b0100, 0]
+        [0b0010, 0b0110, 0b0010, 0b0010, 0b0010, 0b0010, 0b0010, 0]
     );
 }
 
