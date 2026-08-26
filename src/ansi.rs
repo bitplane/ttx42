@@ -2,6 +2,38 @@ use std::fmt::Write;
 
 use crate::{CellSize, Grid};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PresentationCell {
+    pub glyphs: String,
+    pub width: u8,
+    pub fg: u8,
+    pub bg: u8,
+    pub flash: bool,
+    pub conceal: bool,
+}
+
+pub type PresentationGrid = Vec<Vec<PresentationCell>>;
+
+/// Render semantic teletext cells without terminal escape sequences. In wide
+/// mode every source cell contributes exactly two terminal cells.
+pub fn present(grid: &Grid, options: &AnsiOptions) -> PresentationGrid {
+    grid.rows()
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| PresentationCell {
+                    glyphs: cell_glyphs(cell, options),
+                    width: if options.wide { 2 } else { 1 },
+                    fg: cell.fg,
+                    bg: cell.bg,
+                    flash: cell.flash,
+                    conceal: cell.conceal,
+                })
+                .collect()
+        })
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SeparatedStyle {
     #[default]
@@ -36,34 +68,40 @@ pub fn to_ansi(grid: &Grid, options: &AnsiOptions) -> String {
                 let _ = write!(output, "\x1b[{};{}m", 30 + cell.fg, 40 + cell.bg);
                 colours = Some(next);
             }
-            if options.wide
-                && matches!(cell.size, CellSize::DoubleTop | CellSize::DoubleBottom)
-                && let Some(glyph) = crate::saa5050::glyph(cell.ch)
-            {
-                let half = usize::from(cell.size == CellSize::DoubleBottom);
-                output.extend(glyph[half]);
-                continue;
-            }
-            let ch = if cell.size == CellSize::DoubleBottom {
-                ' '
-            } else if cell.separated {
-                separated_char(cell.ch, options.separated)
-            } else {
-                cell.ch
-            };
-            let mosaic = cell.separated || char_mask(cell.ch).is_some_and(|mask| mask != 0);
-            if options.wide && mosaic {
-                push_wide_mosaic(
-                    &mut output,
-                    char_mask(cell.ch).unwrap_or(0),
-                    cell.separated,
-                    options.separated,
-                );
-            } else {
-                push_cell(&mut output, ch, options.wide);
-            }
+            output.push_str(&cell_glyphs(cell, options));
         }
         output.push_str("\x1b[0m\n");
+    }
+    output
+}
+
+fn cell_glyphs(cell: &crate::Cell, options: &AnsiOptions) -> String {
+    if options.wide
+        && matches!(cell.size, CellSize::DoubleTop | CellSize::DoubleBottom)
+        && let Some(glyph) = crate::saa5050::glyph(cell.ch)
+    {
+        return glyph[usize::from(cell.size == CellSize::DoubleBottom)]
+            .iter()
+            .collect();
+    }
+    let ch = if cell.size == CellSize::DoubleBottom {
+        ' '
+    } else if cell.separated {
+        separated_char(cell.ch, options.separated)
+    } else {
+        cell.ch
+    };
+    let mosaic = cell.separated || char_mask(cell.ch).is_some_and(|mask| mask != 0);
+    let mut output = String::new();
+    if options.wide && mosaic {
+        push_wide_mosaic(
+            &mut output,
+            char_mask(cell.ch).unwrap_or(0),
+            cell.separated,
+            options.separated,
+        );
+    } else {
+        push_cell(&mut output, ch, options.wide);
     }
     output
 }

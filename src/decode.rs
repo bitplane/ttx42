@@ -139,7 +139,7 @@ fn decode_row(bytes: &[u8; COLS], options: &DecodeOptions) -> [Cell; COLS] {
                 cell.separated = held.separated;
             }
         } else if state.mosaic && !(0x40..=0x5f).contains(&code) {
-            let mask = mosaic_mask(code);
+            let mask = mosaic_mask(code).unwrap_or(0);
             cell.ch = sextant(mask);
             state.held = (code & 0x20 != 0).then_some(Held {
                 ch: cell.ch,
@@ -213,11 +213,20 @@ fn set_size(state: &mut State, double: bool) {
     state.double = double;
 }
 
-pub(crate) fn mosaic_mask(code: u8) -> u8 {
+pub fn mosaic_mask(code: u8) -> Option<u8> {
     match code {
-        0x20..=0x3f => code - 0x20,
-        0x60..=0x7f => code - 0x60 + 32,
-        _ => 0,
+        0x20..=0x3f => Some(code - 0x20),
+        0x60..=0x7f => Some(code - 0x60 + 32),
+        _ => None,
+    }
+}
+
+pub fn mosaic_code(mask: u8) -> u8 {
+    let mask = mask & 0x3f;
+    if mask < 32 {
+        0x20 + mask
+    } else {
+        0x60 + mask - 32
     }
 }
 

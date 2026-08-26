@@ -1,6 +1,7 @@
 use crate::ansi::braille;
 use crate::formats::{encode_hamming84, hamming84, parity_data};
 use crate::{AnsiOptions, CellSize, DecodeOptions, Page, SeparatedStyle, decode, to_ansi};
+use crate::{FastTextLinks, Service, VisualCell, compile_visual_row, present};
 
 fn page_with_row(row: usize, data: &[u8]) -> Page {
     let mut raw = vec![b' '; 1000];
@@ -315,4 +316,90 @@ fn t42_assembles_interleaved_magazines_and_survives_garbage() {
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].raw()[1][0], b'A');
     assert_eq!(pages[1].raw()[1][0], b'B');
+}
+
+#[test]
+fn service_round_trips_subpages_fasttext_and_unknown_records() {
+    let input = "PN,2000001\r\nSC,0001\r\nDE,kept\r\nFL,201,202,203,204,205,100\r\nOL,1,\x1bAHELLO\r\nPN,2000002\r\nSC,0002\r\nOL,1,WORLD\r\n";
+    let service = Service::parse_tti(input).unwrap();
+    assert_eq!(service.pages().len(), 2);
+    assert_eq!(
+        service.page(0x200, 1).unwrap().preserved_records()[0].key,
+        "DE"
+    );
+    assert_eq!(
+        service.page(0x200, 1).unwrap().fasttext(),
+        Some(FastTextLinks {
+            red: 0x201,
+            green: 0x202,
+            yellow: 0x203,
+            cyan: 0x204,
+            extra: 0x205,
+            index: 0x100
+        })
+    );
+    assert_eq!(Service::parse_tti(&service.to_tti()).unwrap(), service);
+}
+
+#[test]
+fn presentation_is_exactly_eighty_columns_and_keeps_flash() {
+    let grid = decode(&page_with_row(0, &[0x08, b'X']), &DecodeOptions::default());
+    let rendered = present(&grid, &AnsiOptions::default());
+    assert_eq!(
+        rendered[0]
+            .iter()
+            .map(|cell| cell.width as usize)
+            .sum::<usize>(),
+        80
+    );
+    assert!(rendered[0][1].flash);
+}
+
+#[test]
+fn visual_compiler_uses_a_blank_before_a_colour_transition() {
+    let mut row = [VisualCell::default(); 40];
+    row[1].fg = 1;
+    row[1].ch = b'R';
+    let compiled = compile_visual_row(&row);
+    assert_eq!(&compiled.bytes[..2], &[0x01, b'R']);
+    assert!(compiled.warnings.is_empty());
+}
+
+#[test]
+fn visual_compiler_reports_impossible_level_one_backgrounds() {
+    let mut row = [VisualCell::default(); 40];
+    row[1].fg = 1;
+    row[1].bg = 4;
+    row[1].ch = b'X';
+    let compiled = compile_visual_row(&row);
+    assert!(
+        compiled
+            .warnings
+            .iter()
+            .any(|warning| warning.column == 1 && warning.message.contains("background"))
+    );
+}
+
+#[test]
+fn mosaic_codes_round_trip_all_six_bit_masks() {
+    for mask in 0..64 {
+        assert_eq!(crate::mosaic_mask(crate::mosaic_code(mask)), Some(mask));
+    }
+}
+
+#[test]
+fn visual_compiler_output_decodes_to_requested_combined_style() {
+    let mut row = [VisualCell::default(); 40];
+    row[4] = VisualCell {
+        ch: b'X',
+        fg: 1,
+        bg: 1,
+        flash: true,
+        ..VisualCell::default()
+    };
+    let compiled = compile_visual_row(&row);
+    let page = page_with_row(0, &compiled.bytes);
+    let grid = decode(&page, &DecodeOptions::default());
+    let cell = grid.cell(0, 4).unwrap();
+    assert_eq!((cell.ch, cell.fg, cell.bg, cell.flash), ('X', 1, 1, true));
 }

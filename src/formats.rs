@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::Error;
 
@@ -10,6 +10,29 @@ pub struct Page {
     pub(crate) bytes: [[u8; COLS]; ROWS],
     number: Option<u16>,
     subpage: Option<u16>,
+    fasttext: Option<FastTextLinks>,
+    records: Vec<TtiRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TtiRecord {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FastTextLinks {
+    pub red: u16,
+    pub green: u16,
+    pub yellow: u16,
+    pub cyan: u16,
+    pub extra: u16,
+    pub index: u16,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Service {
+    pages: Vec<Page>,
 }
 
 impl Default for Page {
@@ -18,6 +41,8 @@ impl Default for Page {
             bytes: [[b' '; COLS]; ROWS],
             number: None,
             subpage: None,
+            fasttext: None,
+            records: Vec::new(),
         }
     }
 }
@@ -51,6 +76,114 @@ impl Page {
     pub fn raw(&self) -> &[[u8; COLS]; ROWS] {
         &self.bytes
     }
+    pub fn raw_mut(&mut self) -> &mut [[u8; COLS]; ROWS] {
+        &mut self.bytes
+    }
+    pub fn set_identity(&mut self, number: u16, subpage: u16) {
+        self.number = Some(number);
+        self.subpage = Some(subpage);
+    }
+    pub fn fasttext(&self) -> Option<FastTextLinks> {
+        self.fasttext
+    }
+    pub fn set_fasttext(&mut self, links: Option<FastTextLinks>) {
+        self.fasttext = links;
+    }
+    pub fn preserved_records(&self) -> &[TtiRecord] {
+        &self.records
+    }
+}
+
+impl Service {
+    pub fn parse_tti(text: &str) -> Result<Self, Error> {
+        Ok(Self {
+            pages: parse_tti(text)?,
+        })
+    }
+    pub fn parse_t42(bytes: &[u8]) -> Result<Self, Error> {
+        Ok(Self {
+            pages: parse_t42(bytes),
+        })
+    }
+    pub fn pages(&self) -> &[Page] {
+        &self.pages
+    }
+    pub fn pages_mut(&mut self) -> &mut Vec<Page> {
+        &mut self.pages
+    }
+    pub fn insert(&mut self, page: Page) {
+        self.pages.push(page);
+        self.pages
+            .sort_by_key(|page| (page.number.unwrap_or(0), page.subpage.unwrap_or(0)));
+    }
+    pub fn remove(&mut self, number: u16, subpage: u16) -> Option<Page> {
+        let index = self
+            .pages
+            .iter()
+            .position(|page| page.number == Some(number) && page.subpage.unwrap_or(0) == subpage)?;
+        Some(self.pages.remove(index))
+    }
+    pub fn page(&self, number: u16, subpage: u16) -> Option<&Page> {
+        self.pages
+            .iter()
+            .find(|page| page.number == Some(number) && page.subpage.unwrap_or(0) == subpage)
+    }
+    pub fn subpages(&self, number: u16) -> impl Iterator<Item = &Page> {
+        self.pages
+            .iter()
+            .filter(move |page| page.number == Some(number))
+    }
+    pub fn page_numbers(&self) -> impl Iterator<Item = u16> + '_ {
+        let mut numbers = BTreeMap::new();
+        for page in &self.pages {
+            if let Some(number) = page.number {
+                numbers.insert(number, ());
+            }
+        }
+        numbers.into_keys()
+    }
+    pub fn to_tti(&self) -> String {
+        let mut out = String::new();
+        for page in &self.pages {
+            let number = page.number.unwrap_or(0x100);
+            let subpage = page.subpage.unwrap_or(0);
+            out.push_str(&format!(
+                "PN,{number:03X}{subpage:04X}\r\nSC,{subpage:04X}\r\n"
+            ));
+            for record in &page.records {
+                out.push_str(&record.key);
+                out.push(',');
+                out.push_str(&record.value);
+                out.push_str("\r\n");
+            }
+            if let Some(links) = page.fasttext {
+                out.push_str(&format!(
+                    "FL,{:03X},{:03X},{:03X},{:03X},{:03X},{:03X}\r\n",
+                    links.red, links.green, links.yellow, links.cyan, links.extra, links.index
+                ));
+            }
+            for (row, bytes) in page.bytes.iter().enumerate() {
+                let end = bytes
+                    .iter()
+                    .rposition(|byte| *byte != b' ')
+                    .map_or(0, |index| index + 1);
+                if end == 0 {
+                    continue;
+                }
+                out.push_str(&format!("OL,{row},"));
+                for &byte in &bytes[..end] {
+                    if byte < 0x20 {
+                        out.push('\x1b');
+                        out.push((byte + 0x40) as char);
+                    } else {
+                        out.push(byte as char);
+                    }
+                }
+                out.push_str("\r\n");
+            }
+        }
+        out
+    }
 }
 
 fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
@@ -81,6 +214,28 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                     page.subpage = u16::from_str_radix(value.trim(), 16).ok();
                 }
             }
+            "FL" => {
+                if let Some(page) = current.as_mut() {
+                    let values: Vec<_> = value.split(',').map(str::trim).collect();
+                    if values.len() >= 6 {
+                        let parse = |value: &str| {
+                            u16::from_str_radix(
+                                value.trim_start_matches(|c: char| !c.is_ascii_hexdigit()),
+                                16,
+                            )
+                            .unwrap_or(0)
+                        };
+                        page.fasttext = Some(FastTextLinks {
+                            red: parse(values[0]),
+                            green: parse(values[1]),
+                            yellow: parse(values[2]),
+                            cyan: parse(values[3]),
+                            extra: parse(values[4]),
+                            index: parse(values[5]),
+                        });
+                    }
+                }
+            }
             "OL" => {
                 let (row, data) = value
                     .split_once(',')
@@ -95,6 +250,14 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                 let decoded = decode_tti_line(data.as_bytes());
                 for (column, byte) in decoded.into_iter().take(COLS).enumerate() {
                     page.bytes[row][column] = byte;
+                }
+            }
+            _ if !key.is_empty() => {
+                if let Some(page) = current.as_mut() {
+                    page.records.push(TtiRecord {
+                        key: key.to_string(),
+                        value: value.to_string(),
+                    });
                 }
             }
             _ => {}

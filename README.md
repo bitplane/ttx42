@@ -12,6 +12,13 @@ let grid = ttx42::decode(&page, &ttx42::DecodeOptions::default());
 print!("{}", ttx42::to_ansi(&grid, &ttx42::AnsiOptions::default()));
 ```
 
+For a complete carousel, `Service::parse_tti` retains ordered pages,
+subpages, Fasttext links and vendor records, and `Service::to_tti` writes a
+canonical CRLF TTI document. Graphical consumers can use `present` instead of
+parsing ANSI; it returns glyph spans plus colour, flash and conceal metadata.
+The authoring-side `compile_visual_row` converts styled cells into genuine
+Level 1 control-code rows and reports every display cell it had to sacrifice.
+
 The `ttx42` command reads raw 960/1000-byte pages, MRG `.tti` files and
 42-byte packet `.t42` recoveries. It reads stdin when no file (or `-`) is
 given:
@@ -54,8 +61,8 @@ its `ttxcat` CLI by Vilcans are prior art. For browser-based authoring see
 
 ## Scope
 
-This release targets UK Level 1 pages. Level 1.5/2.5/3.5 enhancements,
-additional national subsets and editing are intentionally out of scope.
+This release targets UK Level 1 pages. Level 1.5/2.5/3.5 enhancements and
+additional national subsets are intentionally out of scope.
 
 ## License
 

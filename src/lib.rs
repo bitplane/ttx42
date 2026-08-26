@@ -1,14 +1,16 @@
 //! Level 1 broadcast teletext decoding with a presentation-independent grid.
 
 mod ansi;
+mod compile;
 mod decode;
 mod formats;
 mod saa5050;
 mod sn8k5050;
 
-pub use ansi::{AnsiOptions, SeparatedStyle, to_ansi};
-pub use decode::{Cell, CellSize, DecodeOptions, Grid, decode};
-pub use formats::Page;
+pub use ansi::{AnsiOptions, PresentationCell, PresentationGrid, SeparatedStyle, present, to_ansi};
+pub use compile::{CompileWarning, CompiledRow, VisualCell, compile_visual_row};
+pub use decode::{Cell, CellSize, DecodeOptions, Grid, decode, mosaic_code, mosaic_mask};
+pub use formats::{FastTextLinks, Page, Service, TtiRecord};
 
 #[cfg(test)]
 mod tests;
