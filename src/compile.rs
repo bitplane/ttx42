@@ -159,7 +159,8 @@ fn state_for(cell: VisualCell) -> State {
 fn transition_controls(mut state: State, target: VisualCell) -> Vec<u8> {
     let target = state_for(target);
     let mut out = Vec::new();
-    if state.mosaic != target.mosaic || state.fg != target.fg {
+    if state.mosaic != target.mosaic || state.fg != target.fg || (state.conceal && !target.conceal)
+    {
         out.push(if target.mosaic {
             0x10 + target.fg
         } else {

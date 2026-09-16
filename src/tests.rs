@@ -416,6 +416,30 @@ fn visual_compiler_uses_a_blank_before_a_colour_transition() {
 }
 
 #[test]
+fn visual_compiler_clears_conceal_without_changing_colour_or_mode() {
+    for mosaic in [false, true] {
+        let mut row = [VisualCell {
+            mosaic,
+            ..VisualCell::default()
+        }; 10];
+        row[3].ch = b'X';
+        row[3].conceal = true;
+        row[7].ch = b'Y';
+        let compiled = compile_visual_row(&row);
+        assert!(compiled.warnings.is_empty());
+        let page = page_with_row(0, &compiled.bytes);
+        let hidden = decode(&page, &DecodeOptions::default());
+        let revealed = decode(&page, &DecodeOptions { reveal: true });
+        assert_eq!(hidden.cell(0, 3).unwrap().ch, ' ');
+        assert_eq!(revealed.cell(0, 3).unwrap().ch, 'X');
+        let visible = hidden.cell(0, 7).unwrap();
+        assert_eq!(visible.ch, 'Y');
+        assert!(!visible.conceal);
+        assert_eq!(visible.fg, 7);
+    }
+}
+
+#[test]
 fn visual_compiler_reports_impossible_level_one_backgrounds() {
     let mut row = [VisualCell::default(); 40];
     row[1].fg = 1;
