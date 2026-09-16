@@ -30,6 +30,16 @@ ttx42 page.bin --separated braille
 ttx42 page.bin --narrow
 ```
 
+For T42 input containing multiple transmissions, running without `--page` or
+`--subpage` lists the recovered page and subpage numbers in hexadecimal,
+including repeated transmissions. Either selector switches to rendering;
+selectors may be combined and their values are hexadecimal.
+
+When multiple pages or transmissions match, the CLI renders the one with the
+most visible non-space decoded cells; ties select the last match in input
+order. This also applies to multi-page TTI files. Transmissions are not merged.
+Use `--format raw|tti|t42` to override automatic format detection.
+
 Separated mosaics default to widely-supported braille. Its bottom dot row is
 repeated to give the 2×3 teletext mosaic a better terminal aspect ratio.
 Contiguous legacy sextants and Unicode 16 separated sextants are selectable. Double
@@ -45,8 +55,7 @@ compact 40-column fallback.
 ## Specimen
 
 Run `cargo run --example specimen -- --wide` for a small built-in page, or
-render a recovery with `ttx42 recovery.t42 --page 188 --wide`. A terminal
-screenshot can replace this note after release preparation.
+render a recovery with `ttx42 recovery.t42 --page 188 --wide`.
 
 ## Corpus
 
