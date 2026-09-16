@@ -521,6 +521,52 @@ fn presentation_is_exactly_eighty_columns_and_keeps_flash() {
 }
 
 #[test]
+fn visual_compiler_uses_partial_blank_runs_before_sacrificing_text() {
+    let styled = VisualCell {
+        ch: b'X',
+        fg: 1,
+        bg: 4,
+        flash: true,
+        ..VisualCell::default()
+    };
+    let mut row = [styled; 8];
+    row[..2].fill(VisualCell::default());
+    let compiled = compile_visual_row(&row);
+    assert_eq!(
+        &compiled.bytes[..8],
+        &[0x04, 0x1d, 0x01, 0x08, b'X', b'X', b'X', b'X']
+    );
+    let consumed: Vec<_> = compiled
+        .warnings
+        .iter()
+        .filter(|warning| row[warning.column].ch != b' ')
+        .map(|warning| warning.column)
+        .collect();
+    assert_eq!(consumed, [2, 3]);
+    assert!(compiled.warnings.iter().any(|warning| warning.column == 1));
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    for column in 4..8 {
+        let cell = grid.cell(0, column).unwrap();
+        assert_eq!((cell.ch, cell.fg, cell.bg, cell.flash), ('X', 1, 4, true));
+    }
+
+    // The blank before A must not be reused: doing so would recolour A.
+    row[..3].fill(VisualCell::default());
+    row[1].ch = b'A';
+    let compiled = compile_visual_row(&row);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    let a = grid.cell(0, 1).unwrap();
+    assert_eq!((a.ch, a.fg, a.bg, a.flash), ('A', 7, 0, false));
+    assert_eq!(&compiled.bytes[..4], &[b' ', b'A', 0x04, 0x1d]);
+}
+
+#[test]
 fn visual_compiler_uses_a_blank_before_a_colour_transition() {
     let mut row = [VisualCell::default(); 40];
     row[1].fg = 1;

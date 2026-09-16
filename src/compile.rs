@@ -82,27 +82,27 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
         // Level 1 can express only one control per transmitted cell. Walk
         // backwards over blank cells, preserving the requested text whenever
         // sufficient room exists.
-        let start = column.saturating_sub(controls.len());
-        let slots: Vec<_> = (start..column)
-            .filter(|&slot| {
-                bytes[slot] == b' ' && cells.get(slot).is_none_or(|cell| cell.ch == b' ')
-            })
-            .collect();
-        let enough = slots.len() >= controls.len();
-        if enough {
-            let chosen = &slots[slots.len() - controls.len()..];
-            for (&slot, &control) in chosen.iter().zip(&controls) {
-                bytes[slot] = control;
-                apply_control(&mut state, control);
-                warn_blank_background(&mut warnings, slot, cells[slot], state);
-            }
+        let mut start = column;
+        while start > 0
+            && column - start < controls.len()
+            && bytes[start - 1] == b' '
+            && cells[start - 1].ch == b' '
+        {
+            start -= 1;
+        }
+        let reused = column - start;
+        for (slot, &control) in (start..column).zip(&controls) {
+            bytes[slot] = control;
+            apply_control(&mut state, control);
+            warn_blank_background(&mut warnings, slot, cells[slot], state);
+        }
+        if reused == controls.len() {
             bytes[column] = target.ch & 0x7f;
         } else {
-            // Never rewrite an earlier transmitted control. If there is not
-            // enough blank space before this cell, emit the next transition
-            // here and let following cells complete the state change.
-            bytes[column] = controls[0];
-            apply_control(&mut state, controls[0]);
+            // Use every available preceding blank before sacrificing this
+            // cell. Stop at existing text or controls to preserve their state.
+            bytes[column] = controls[reused];
+            apply_control(&mut state, controls[reused]);
             warn_blank_background(&mut warnings, column, target, state);
             if target.ch != b' ' {
                 warnings.push(CompileWarning {
