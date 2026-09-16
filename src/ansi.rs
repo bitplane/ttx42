@@ -120,7 +120,7 @@ pub(crate) fn separated_char(ch: char, style: SeparatedStyle) -> char {
     match style {
         SeparatedStyle::Contiguous => ch,
         SeparatedStyle::Braille => braille(mask),
-        SeparatedStyle::Unicode16 => unicode16(mask).unwrap_or_else(|| braille(mask)),
+        SeparatedStyle::Unicode16 => unicode16(mask),
     }
 }
 
@@ -151,7 +151,7 @@ fn push_wide_mosaic(output: &mut String, mask: u8, separated: bool, style: Separ
             match style {
                 SeparatedStyle::Braille => braille(mask),
                 SeparatedStyle::Contiguous => crate::decode::sextant(mask),
-                SeparatedStyle::Unicode16 => unicode16(mask).unwrap_or_else(|| braille(mask)),
+                SeparatedStyle::Unicode16 => unicode16(mask),
             }
         } else {
             crate::decode::sextant(mask)
@@ -181,8 +181,9 @@ pub(crate) fn braille(mask: u8) -> char {
     char::from_u32(0x2800 + bits as u32).unwrap()
 }
 
-fn unicode16(mask: u8) -> Option<char> {
+fn unicode16(mask: u8) -> char {
     // Unicode 16 Symbols for Legacy Computing Supplement. The assigned
     // sequence U+1CE51..U+1CE8F follows the sextant mask numerically.
-    (mask != 0).then(|| char::from_u32(0x1ce50 + mask as u32))?
+    debug_assert!((1..=63).contains(&mask));
+    char::from_u32(0x1ce50 + mask as u32).unwrap()
 }
