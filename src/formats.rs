@@ -189,6 +189,7 @@ impl Service {
 fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
     let mut pages = Vec::new();
     let mut current: Option<Page> = None;
+    let mut leading_records = Vec::new();
     for line in text.lines() {
         let line = line.trim_end_matches('\r');
         let (key, value) = line.split_once(',').unwrap_or((line, ""));
@@ -197,7 +198,10 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                 if let Some(page) = current.take() {
                     pages.push(page);
                 }
-                let mut page = Page::default();
+                let mut page = Page {
+                    records: std::mem::take(&mut leading_records),
+                    ..Page::default()
+                };
                 let token = value.split(',').next().unwrap_or(value).trim();
                 let token = token.trim_start_matches(|c: char| !c.is_ascii_hexdigit());
                 let number = token
@@ -248,19 +252,23 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                 if row >= ROWS {
                     continue;
                 }
-                let page = current.get_or_insert_with(Page::default);
+                let page = current.get_or_insert_with(|| Page {
+                    records: std::mem::take(&mut leading_records),
+                    ..Page::default()
+                });
                 let decoded = decode_tti_line(data.as_bytes());
                 for (column, byte) in decoded.into_iter().take(COLS).enumerate() {
                     page.bytes[row][column] = byte;
                 }
             }
             _ if !key.is_empty() => {
-                if let Some(page) = current.as_mut() {
-                    page.records.push(TtiRecord {
-                        key: key.to_string(),
-                        value: value.to_string(),
-                    });
-                }
+                let records = current
+                    .as_mut()
+                    .map_or(&mut leading_records, |page| &mut page.records);
+                records.push(TtiRecord {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                });
             }
             _ => {}
         }

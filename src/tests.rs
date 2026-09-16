@@ -386,6 +386,37 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn tti_preserves_leading_records_on_the_first_page() {
+    for first_page in ["PN,1000001\r\nOL,1,HELLO", "OL,1,HELLO"] {
+        let input = format!(
+            "DE,Page description\r\nXX,vendor,data\r\n{first_page}\r\nPN,2000001\r\nOL,1,WORLD\r\n"
+        );
+        let service = Service::parse_tti(&input).unwrap();
+        assert_eq!(service.pages().len(), 2);
+        let records = service.pages()[0].preserved_records();
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            (records[0].key.as_str(), records[0].value.as_str()),
+            ("DE", "Page description")
+        );
+        assert_eq!(
+            (records[1].key.as_str(), records[1].value.as_str()),
+            ("XX", "vendor,data")
+        );
+        assert!(service.pages()[1].preserved_records().is_empty());
+        let serialized = service.to_tti();
+        let reparsed = Service::parse_tti(&serialized).unwrap();
+        assert_eq!(reparsed.pages()[0].preserved_records(), records);
+        assert_eq!(reparsed.to_tti(), serialized);
+        assert_eq!(Page::parse_tti(&input).unwrap(), service.pages());
+    }
+    assert_eq!(
+        Service::parse_tti("DE,description\r\n"),
+        Err(crate::Error::NoPages)
+    );
+}
+
+#[test]
 fn service_round_trips_subpages_fasttext_and_unknown_records() {
     let input = "PN,2000001\r\nSC,0001\r\nDE,kept\r\nFL,201,202,203,204,205,100\r\nOL,1,\x1bAHELLO\r\nPN,2000002\r\nSC,0002\r\nOL,1,WORLD\r\n";
     let service = Service::parse_tti(input).unwrap();
