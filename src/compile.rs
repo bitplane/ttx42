@@ -66,7 +66,8 @@ impl Default for State {
 
 /// Compile a WYSIWYG row to a real Level 1 control-code row. Attribute
 /// transitions consume cells; a preceding blank is used where possible,
-/// otherwise the transition cell is sacrificed and reported.
+/// otherwise the transition cell is sacrificed and reported. Changes to the
+/// background of a reused blank are also reported.
 pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
     let mut bytes = [b' '; COLS];
     let mut warnings = Vec::new();
@@ -93,6 +94,7 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
             for (&slot, &control) in chosen.iter().zip(&controls) {
                 bytes[slot] = control;
                 apply_control(&mut state, control);
+                warn_blank_background(&mut warnings, slot, cells[slot], state);
             }
             bytes[column] = target.ch & 0x7f;
         } else {
@@ -101,6 +103,7 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
             // here and let following cells complete the state change.
             bytes[column] = controls[0];
             apply_control(&mut state, controls[0]);
+            warn_blank_background(&mut warnings, column, target, state);
             if target.ch != b' ' {
                 warnings.push(CompileWarning {
                     column,
@@ -110,6 +113,22 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
         }
     }
     CompiledRow { bytes, warnings }
+}
+
+fn warn_blank_background(
+    warnings: &mut Vec<CompileWarning>,
+    column: usize,
+    target: VisualCell,
+    state: State,
+) {
+    // Background controls are set-at: the new background is already visible
+    // in the cell occupied by the control, even when its glyph is a space.
+    if target.ch == b' ' && state.bg != target.bg.min(7) {
+        warnings.push(CompileWarning {
+            column,
+            message: "attribute transition changes this blank cell's background".into(),
+        });
+    }
 }
 
 fn apply_control(state: &mut State, control: u8) {

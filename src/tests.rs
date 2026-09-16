@@ -534,3 +534,50 @@ fn visual_compiler_output_decodes_to_requested_combined_style() {
     let cell = grid.cell(0, 4).unwrap();
     assert_eq!((cell.ch, cell.fg, cell.bg, cell.flash), ('X', 1, 1, true));
 }
+
+#[test]
+fn visual_compiler_reports_background_changes_to_reused_blanks() {
+    let mut row = [VisualCell::default(); 3];
+    row[2] = VisualCell {
+        ch: b'X',
+        bg: 7,
+        ..VisualCell::default()
+    };
+    let compiled = compile_visual_row(&row);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    assert_eq!(grid.cell(0, 1).unwrap().bg, 7);
+    assert_eq!(compiled.warnings.len(), 1);
+    assert_eq!(compiled.warnings[0].column, 1);
+    assert!(compiled.warnings[0].message.contains("background"));
+    assert_eq!(
+        (grid.cell(0, 2).unwrap().ch, grid.cell(0, 2).unwrap().bg),
+        ('X', 7)
+    );
+}
+
+#[test]
+fn visual_compiler_reports_unfinished_background_transition_on_blank() {
+    let row = [VisualCell {
+        bg: 4,
+        ..VisualCell::default()
+    }; 4];
+    let compiled = compile_visual_row(&row);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    for (column, target) in row.iter().enumerate() {
+        let changed = grid.cell(0, column).unwrap().bg != target.bg;
+        assert_eq!(
+            compiled
+                .warnings
+                .iter()
+                .any(|warning| warning.column == column),
+            changed
+        );
+    }
+    assert_eq!(compiled.warnings.len(), 1);
+}
