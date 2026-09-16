@@ -928,6 +928,68 @@ fn visual_compiler_reports_unfinished_background_transition_on_blank() {
 }
 
 #[test]
+fn t42_filler_headers_end_transmissions_without_becoming_pages() {
+    fn header(magazine: u8, number: u8, subpage: u16) -> [u8; 42] {
+        let mut packet = [b' '; 42];
+        let nibbles = [
+            magazine & 7,
+            0,
+            number & 15,
+            number >> 4,
+            (subpage & 15) as u8,
+            ((subpage >> 4) & 7) as u8,
+            ((subpage >> 8) & 15) as u8,
+            ((subpage >> 12) & 3) as u8,
+            0,
+            0,
+        ];
+        for (byte, nibble) in packet.iter_mut().zip(nibbles) {
+            *byte = encode_hamming84(nibble);
+        }
+        packet
+    }
+    fn row(magazine: u8, ch: u8) -> [u8; 42] {
+        let parity = if ch.count_ones() % 2 == 1 {
+            ch
+        } else {
+            ch | 0x80
+        };
+        let mut packet = [parity; 42];
+        packet[0] = encode_hamming84((magazine & 7) | 8);
+        packet[1] = encode_hamming84(0);
+        packet
+    }
+    for magazine in 1..=8 {
+        for subpage in [0, 0x3f7e, 0x3f7f] {
+            let mut filler = header(magazine, 0xff, subpage);
+            filler[2] ^= 1; // Correctable damage must not admit a filler page.
+            assert_eq!(Page::parse_t42(&filler), Err(crate::Error::NoPages));
+            let input = [
+                header(magazine, 0x10, 0),
+                row(magazine, b'A'),
+                filler,
+                row(magazine, b'B'),
+                header(magazine, 0x11, 0),
+                row(magazine, b'C'),
+            ]
+            .concat();
+            let pages = Page::parse_t42(&input).unwrap();
+            assert_eq!(pages.len(), 2);
+            assert_eq!(
+                pages[0].page_number(),
+                Some(u16::from(magazine) * 0x100 + 0x10)
+            );
+            assert_eq!(
+                pages[1].page_number(),
+                Some(u16::from(magazine) * 0x100 + 0x11)
+            );
+            assert_eq!(pages[0].raw()[1][0], b'A');
+            assert_eq!(pages[1].raw()[1][0], b'C');
+        }
+    }
+}
+
+#[test]
 fn t42_parsers_report_no_decodable_pages() {
     for input in [&[][..], &[0xff; 42][..], &[0x15; 41][..]] {
         assert_eq!(Page::parse_t42(input), Err(crate::Error::NoPages));

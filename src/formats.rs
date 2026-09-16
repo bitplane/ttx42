@@ -375,6 +375,11 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
             else {
                 continue;
             };
+            // FF headers terminate the previous transmission but are time
+            // fillers, not pages carrying data (ETSI 300 706, annex A.1).
+            if units == 0x0f && tens == 0x0f {
+                continue;
+            }
             let mut page = Page {
                 number: Some(
                     ((if magazine == 0 { 8 } else { magazine }) as u16) * 0x100
