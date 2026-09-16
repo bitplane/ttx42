@@ -200,13 +200,15 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                 let mut page = Page::default();
                 let token = value.split(',').next().unwrap_or(value).trim();
                 let token = token.trim_start_matches(|c: char| !c.is_ascii_hexdigit());
-                if token.len() >= 3 {
-                    page.number = u16::from_str_radix(&token[..3], 16).ok();
-                    page.subpage = token
-                        .get(3..)
-                        .filter(|value| !value.is_empty())
-                        .and_then(|value| u16::from_str_radix(value, 16).ok());
-                }
+                let number = token
+                    .get(..3)
+                    .and_then(|number| u16::from_str_radix(number, 16).ok())
+                    .ok_or_else(|| Error::InvalidTti(format!("bad PN page number: {value}")))?;
+                page.number = Some(number);
+                page.subpage = token
+                    .get(3..)
+                    .filter(|value| !value.is_empty())
+                    .and_then(|value| u16::from_str_radix(value, 16).ok());
                 current = Some(page);
             }
             "SC" => {

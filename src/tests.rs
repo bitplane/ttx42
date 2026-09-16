@@ -288,6 +288,23 @@ fn tti_decodes_escaped_controls_and_ignores_unknown_keys() {
 }
 
 #[test]
+fn tti_rejects_malformed_page_numbers_without_panicking() {
+    for number in ["1€", "10€", "1�", "1é", "12", "", "1GG"] {
+        assert!(matches!(
+            Page::parse_tti(&format!("PN,{number}\n")),
+            Err(crate::Error::InvalidTti(_))
+        ));
+    }
+    for number in ["100", "1AB", "1ab"] {
+        let pages = Page::parse_tti(&format!("PN,{number}\n")).unwrap();
+        assert_eq!(
+            pages[0].page_number(),
+            Some(u16::from_str_radix(number, 16).unwrap())
+        );
+    }
+}
+
+#[test]
 fn exact_ansi_golden_for_plain_text_page() {
     let ansi = to_ansi(
         &decode(&page_with_row(0, b"HI"), &DecodeOptions::default()),
