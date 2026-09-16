@@ -77,7 +77,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Format::Tti => Page::parse_tti_bytes(&bytes)?,
         Format::T42 => Page::parse_t42(&bytes)?,
     };
-    if matches!(format, Format::T42) && pages.len() > 1 && page_number.is_none() {
+    if matches!(format, Format::T42)
+        && pages.len() > 1
+        && page_number.is_none()
+        && subpage.is_none()
+    {
         for page in &pages {
             println!(
                 "{:03X} {:04X}",

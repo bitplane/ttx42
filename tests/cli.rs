@@ -27,3 +27,33 @@ fn legacy_tti_controls_render_like_escaped_controls() {
     assert!(escaped.status.success());
     assert_eq!(legacy.stdout, escaped.stdout);
 }
+
+#[test]
+fn t42_subpage_selection_without_page_number_is_respected() {
+    // Two headers for page 100, subpages 1 and 2, encoded with Hamming 8/4.
+    let mut input = Vec::new();
+    for subpage in [0x02, 0x49] {
+        input.extend([
+            0x02, 0x15, 0x15, 0x15, subpage, 0x15, 0x15, 0x15, 0x15, 0x15,
+        ]);
+        input.extend([b' '; 32]);
+    }
+    let listing = run(&["--format", "t42"], &input);
+    assert!(listing.status.success());
+    assert_eq!(listing.stdout, b"100 0001\n100 0002\n");
+
+    let selected = run(&["--format", "t42", "--subpage", "2"], &input);
+    let explicit = run(
+        &["--format", "t42", "--page", "100", "--subpage", "2"],
+        &input,
+    );
+    assert!(selected.status.success());
+    assert!(explicit.status.success());
+    assert_eq!(selected.stdout, explicit.stdout);
+    assert!(selected.stdout.starts_with(b"\x1b["));
+
+    let missing = run(&["--format", "t42", "--subpage", "F"], &input);
+    assert!(!missing.status.success());
+    assert!(missing.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("requested page not found"));
+}
