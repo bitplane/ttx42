@@ -439,6 +439,20 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn tti_byte_parser_preserves_all_legacy_controls_and_utf8_metadata() {
+    let mut input = "PN,10001\r\nDE,café\r\nOL,1,".as_bytes().to_vec();
+    input.extend(0x80..=0x9f);
+    input.extend(b",END\r\n");
+    let service = Service::parse_tti_bytes(&input).unwrap();
+    let page = &service.pages()[0];
+    assert_eq!(&page.raw()[1][..32], &(0..32).collect::<Vec<u8>>());
+    assert_eq!(&page.raw()[1][32..36], b",END");
+    assert_eq!(page.preserved_records()[0].value, "café");
+    assert_eq!(Page::parse_tti_bytes(&input).unwrap(), service.pages());
+    assert_eq!(Service::parse_tti(&service.to_tti()).unwrap(), service);
+}
+
+#[test]
 fn tti_preserves_leading_records_on_the_first_page() {
     for first_page in ["PN,1000001\r\nOL,1,HELLO", "OL,1,HELLO"] {
         let input = format!(

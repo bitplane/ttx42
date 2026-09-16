@@ -74,7 +74,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let format = format.unwrap_or_else(|| sniff(&bytes));
     let pages = match format {
         Format::Raw => vec![Page::from_raw(&bytes)?],
-        Format::Tti => Page::parse_tti(&String::from_utf8_lossy(&bytes))?,
+        Format::Tti => Page::parse_tti_bytes(&bytes)?,
         Format::T42 => Page::parse_t42(&bytes)?,
     };
     if matches!(format, Format::T42) && pages.len() > 1 && page_number.is_none() {

@@ -62,7 +62,11 @@ impl Page {
     }
 
     pub fn parse_tti(text: &str) -> Result<Vec<Self>, Error> {
-        parse_tti(text)
+        Self::parse_tti_bytes(text.as_bytes())
+    }
+    /// Parse TTI files, preserving legacy high-bit controls in output lines.
+    pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
+        parse_tti(bytes)
     }
     pub fn parse_t42(bytes: &[u8]) -> Result<Vec<Self>, Error> {
         Ok(parse_t42(bytes))
@@ -96,8 +100,12 @@ impl Page {
 
 impl Service {
     pub fn parse_tti(text: &str) -> Result<Self, Error> {
+        Self::parse_tti_bytes(text.as_bytes())
+    }
+    /// Parse TTI files, preserving legacy high-bit controls in output lines.
+    pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self {
-            pages: parse_tti(text)?,
+            pages: parse_tti(bytes)?,
         })
     }
     pub fn parse_t42(bytes: &[u8]) -> Result<Self, Error> {
@@ -186,12 +194,14 @@ impl Service {
     }
 }
 
-fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
+fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
     let mut pages = Vec::new();
     let mut current: Option<Page> = None;
     let mut leading_records = Vec::new();
-    for line in text.lines() {
-        let line = line.trim_end_matches('\r');
+    for line_bytes in bytes.split(|&byte| byte == b'\n') {
+        let line_bytes = line_bytes.strip_suffix(b"\r").unwrap_or(line_bytes);
+        let line = String::from_utf8_lossy(line_bytes);
+        let line = line.as_ref();
         let (key, value) = line.split_once(',').unwrap_or((line, ""));
         match key {
             "PN" => {
@@ -243,7 +253,7 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                 }
             }
             "OL" => {
-                let (row, data) = value
+                let (row, _) = value
                     .split_once(',')
                     .ok_or_else(|| Error::InvalidTti(format!("OL without row/data: {line}")))?;
                 let row: usize = row
@@ -256,7 +266,9 @@ fn parse_tti(text: &str) -> Result<Vec<Page>, Error> {
                     records: std::mem::take(&mut leading_records),
                     ..Page::default()
                 });
-                let decoded = decode_tti_line(data.as_bytes());
+                // Decode the original bytes: legacy controls are not UTF-8.
+                let data = line_bytes.splitn(3, |&byte| byte == b',').nth(2).unwrap();
+                let decoded = decode_tti_line(data);
                 for (column, byte) in decoded.into_iter().take(COLS).enumerate() {
                     page.bytes[row][column] = byte;
                 }
