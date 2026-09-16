@@ -74,17 +74,35 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
     let mut state = State::default();
     for column in 0..COLS.min(cells.len()) {
         let target = cells[column];
-        let controls = transition_controls(state, target);
+        let mut controls = transition_controls(state, target);
         if controls.is_empty() {
             bytes[column] = target.ch & 0x7f;
             continue;
         }
+        if target.ch == b' '
+            && let Some(index) = controls
+                .iter()
+                .position(|&code| matches!(code, 0x1c | 0x1d))
+            && !controls[index + 1..]
+                .iter()
+                .any(|&code| matches!(code, 0x00..=0x07 | 0x10..=0x17))
+        {
+            // Background can follow independent flash/size controls, but it
+            // must precede a colour restore because it latches foreground.
+            let background = controls.remove(index);
+            controls.push(background);
+        }
+        let current_slot = target.ch == b' '
+            && matches!(
+                controls.last(),
+                Some(0x09 | 0x0c | 0x18 | 0x19 | 0x1a | 0x1c | 0x1d)
+            );
         // Level 1 can express only one control per transmitted cell. Walk
         // backwards over blank cells, preserving the requested text whenever
         // sufficient room exists.
         let mut start = column;
         while start > 0
-            && column - start < controls.len()
+            && column - start < controls.len() - usize::from(current_slot)
             && bytes[start - 1] == b' '
             && cells[start - 1].ch == b' '
         {

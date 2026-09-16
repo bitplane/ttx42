@@ -602,6 +602,73 @@ fn presentation_is_exactly_eighty_columns_and_keeps_flash() {
 }
 
 #[test]
+fn visual_compiler_keeps_set_at_background_in_the_requested_blank() {
+    for (flash, double_height) in [(false, false), (true, false), (false, true)] {
+        let mut row = [VisualCell::default(); 4];
+        row[0].ch = b'A';
+        row[2].bg = 7;
+        row[2].flash = flash;
+        row[2].double_height = double_height;
+        row[3] = VisualCell { ch: b'B', ..row[2] };
+        let compiled = compile_visual_row(&row);
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        assert_eq!(compiled.bytes[2], 0x1d);
+        let grid = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        assert_eq!(
+            grid.rows()[0][..4]
+                .iter()
+                .map(|cell| cell.bg)
+                .collect::<Vec<_>>(),
+            [0, 0, 7, 7]
+        );
+        assert_eq!(grid.cell(0, 2).unwrap().flash, flash);
+        assert_eq!(
+            grid.cell(0, 2).unwrap().size,
+            if double_height {
+                CellSize::DoubleTop
+            } else {
+                CellSize::Normal
+            }
+        );
+        assert_eq!(grid.cell(0, 3).unwrap().ch, 'B');
+    }
+}
+
+#[test]
+fn visual_compiler_keeps_size_and_colour_dependencies_before_blanks() {
+    let mut row = [VisualCell::default(); 5];
+    row[1].double_height = true;
+    let compiled = compile_visual_row(&row);
+    assert_eq!(compiled.bytes[0], 0x0d);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    assert_eq!(grid.cell(0, 1).unwrap().size, CellSize::DoubleTop);
+
+    row = [VisualCell::default(); 5];
+    row[3] = VisualCell {
+        fg: 1,
+        bg: 4,
+        ..VisualCell::default()
+    };
+    row[4] = VisualCell { ch: b'X', ..row[3] };
+    let compiled = compile_visual_row(&row);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    assert_eq!(
+        (grid.cell(0, 3).unwrap().bg, grid.cell(0, 4).unwrap().fg),
+        (4, 1)
+    );
+    assert_eq!(grid.cell(0, 4).unwrap().ch, 'X');
+}
+
+#[test]
 fn visual_compiler_uses_partial_blank_runs_before_sacrificing_text() {
     let styled = VisualCell {
         ch: b'X',
