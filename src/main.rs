@@ -127,7 +127,10 @@ fn parse_hex(value: &str) -> Result<u16, Box<dyn std::error::Error>> {
 }
 
 fn sniff(bytes: &[u8]) -> Format {
-    if bytes.starts_with(b"PN,") || bytes.windows(4).any(|window| window == b"\nOL,") {
+    if bytes
+        .split(|&byte| byte == b'\n')
+        .any(|line| line.starts_with(b"PN,") || line.starts_with(b"OL,"))
+    {
         Format::Tti
     } else if bytes.len().is_multiple_of(42) && !bytes.is_empty() {
         Format::T42

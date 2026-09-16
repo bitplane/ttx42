@@ -57,3 +57,25 @@ fn t42_subpage_selection_without_page_number_is_respected() {
     assert!(missing.stdout.is_empty());
     assert!(String::from_utf8_lossy(&missing.stderr).contains("requested page not found"));
 }
+
+#[test]
+fn tti_detection_accepts_leading_metadata_and_row_only_pages() {
+    for input in [
+        &b"DE,Blank page\r\nPN,10001\r\nSC,0001\r\n"[..],
+        &b"DE,Blank page\nPN,10001\nSC,0001\n"[..],
+        &b"OL,1,HELLO\r\n"[..],
+    ] {
+        let detected = run(&[], input);
+        let explicit = run(&["--format", "tti"], input);
+        assert!(detected.status.success(), "{:?}", detected.stderr);
+        assert!(explicit.status.success());
+        assert_eq!(detected.stdout, explicit.stdout);
+    }
+    // A record marker inside a raw row is ordinary text, not a TTI record.
+    let mut raw = [b' '; 1000];
+    raw[10..17].copy_from_slice(b"PN,1001");
+    let detected = run(&[], &raw);
+    let explicit = run(&["--format", "raw"], &raw);
+    assert!(detected.status.success());
+    assert_eq!(detected.stdout, explicit.stdout);
+}
