@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::Error;
 
@@ -149,13 +149,13 @@ impl Service {
             .filter(move |page| page.number == Some(number))
     }
     pub fn page_numbers(&self) -> impl Iterator<Item = u16> + '_ {
-        let mut numbers = BTreeMap::new();
+        let mut numbers = BTreeSet::new();
         for page in &self.pages {
             if let Some(number) = page.number {
-                numbers.insert(number, ());
+                numbers.insert(number);
             }
         }
-        numbers.into_keys()
+        numbers.into_iter()
     }
     /// Write canonical TTI. PN uses the five-digit `mppss` form; SC carries
     /// the full subcode. Subcodes outside two BCD digits use `00` in PN.
