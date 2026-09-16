@@ -19,14 +19,32 @@ release:
         echo "error: tag $tag already exists" >&2
         exit 1
     fi
+    cargo check --locked
+    cargo fmt --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo test --locked --all-targets
+    # Keep failed package validation or commits from leaving a version bump.
+    backup=$(mktemp -d)
+    cp Cargo.toml Cargo.lock "$backup/"
+    rollback=true
+    cleanup() {
+        result=$?
+        if [[ "$rollback" == true ]]; then
+            cp "$backup/Cargo.toml" Cargo.toml
+            cp "$backup/Cargo.lock" Cargo.lock
+            git reset --quiet -- Cargo.toml Cargo.lock
+        fi
+        rm -rf "$backup"
+        exit "$result"
+    }
+    trap cleanup EXIT
+    trap 'exit 1' HUP INT TERM
     sed -i "0,/^version = \"$current\"$/s//version = \"$version\"/" Cargo.toml
     cargo check
-    cargo fmt --check
-    cargo clippy --all-targets -- -D warnings
-    cargo test --all-targets
+    cargo publish --dry-run --allow-dirty --locked
     git add Cargo.toml Cargo.lock
     git commit -m "release $version"
-    cargo publish --dry-run
+    rollback=false
     git tag -a "$tag" -m "$tag"
     git push origin HEAD
     git push origin "$tag"
