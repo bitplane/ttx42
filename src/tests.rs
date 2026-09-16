@@ -463,6 +463,37 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn tti_preserves_unsupported_output_rows_without_displaying_them() {
+    let mut input = b"PN,10001\r\nOL,1,VISIBLE\r\n".to_vec();
+    for row in 25..=28 {
+        input.extend(format!("OL,{row},").bytes());
+        input.extend(0x80..=0x9f);
+        input.extend(b",PAYLOAD WITH TRAILING SPACES   \r\n");
+    }
+    let service = Service::parse_tti_bytes(&input).unwrap();
+    let page = &service.pages()[0];
+    assert_eq!(&page.raw()[1][..7], b"VISIBLE");
+    assert_eq!(page.preserved_records().len(), 4);
+    for (record, row) in page.preserved_records().iter().zip(25..=28) {
+        assert_eq!(record.key, "OL");
+        let mut expected = format!("{row},");
+        for control in 0..32u8 {
+            expected.push('\x1b');
+            expected.push((control + 0x40) as char);
+        }
+        expected.push_str(",PAYLOAD WITH TRAILING SPACES   ");
+        assert_eq!(record.value, expected);
+    }
+    assert_eq!(Service::parse_tti(&service.to_tti()).unwrap(), service);
+    let extension_only = Service::parse_tti("OL,28,opaque  \r\n").unwrap();
+    assert_eq!(extension_only.pages().len(), 1);
+    assert_eq!(
+        extension_only.pages()[0].preserved_records()[0].value,
+        "28,opaque  "
+    );
+}
+
+#[test]
 fn tti_byte_parser_preserves_all_legacy_controls_and_utf8_metadata() {
     let mut input = "PN,10001\r\nDE,café\r\nOL,1,".as_bytes().to_vec();
     input.extend(0x80..=0x9f);

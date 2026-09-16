@@ -179,14 +179,7 @@ impl Service {
                     continue;
                 }
                 out.push_str(&format!("OL,{row},"));
-                for &byte in &bytes[..end] {
-                    if byte < 0x20 {
-                        out.push('\x1b');
-                        out.push((byte + 0x40) as char);
-                    } else {
-                        out.push(byte as char);
-                    }
-                }
+                out.push_str(&encode_tti_line(&bytes[..end]));
                 out.push_str("\r\n");
             }
         }
@@ -259,9 +252,6 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                 let row: usize = row
                     .parse()
                     .map_err(|_| Error::InvalidTti(format!("bad OL row: {row}")))?;
-                if row >= ROWS {
-                    continue;
-                }
                 let page = current.get_or_insert_with(|| Page {
                     records: std::mem::take(&mut leading_records),
                     ..Page::default()
@@ -269,6 +259,15 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                 // Decode the original bytes: legacy controls are not UTF-8.
                 let data = line_bytes.splitn(3, |&byte| byte == b',').nth(2).unwrap();
                 let decoded = decode_tti_line(data);
+                if row >= ROWS {
+                    // Keep unsupported packets as canonical records, including
+                    // their complete payload and trailing spaces.
+                    page.records.push(TtiRecord {
+                        key: "OL".into(),
+                        value: format!("{row},{}", encode_tti_line(&decoded)),
+                    });
+                    continue;
+                }
                 for (column, byte) in decoded.into_iter().take(COLS).enumerate() {
                     page.bytes[row][column] = byte;
                 }
@@ -293,6 +292,19 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
     } else {
         Ok(pages)
     }
+}
+
+fn encode_tti_line(data: &[u8]) -> String {
+    let mut output = String::new();
+    for &byte in data {
+        if byte < 0x20 {
+            output.push('\x1b');
+            output.push((byte + 0x40) as char);
+        } else {
+            output.push(byte as char);
+        }
+    }
+    output
 }
 
 fn decode_tti_line(data: &[u8]) -> Vec<u8> {
