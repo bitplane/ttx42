@@ -1,4 +1,4 @@
-# Bump the minor version, verify it, commit, tag, and publish the refs.
+# Bump the patch version, verify it, commit, tag, and publish the refs.
 release:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -13,7 +13,7 @@ release:
         exit 1
     fi
     IFS=. read -r major minor patch <<< "$current"
-    version="$major.$((minor + 1)).0"
+    version="$major.$minor.$((patch + 1))"
     tag="v$version"
     if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
         echo "error: tag $tag already exists" >&2
