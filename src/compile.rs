@@ -2,6 +2,8 @@ use crate::formats::COLS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VisualCell {
+    /// Seven-bit display code. The parity bit is ignored; control codes are
+    /// replaced by spaces with a warning rather than interpreted as attributes.
     pub ch: u8,
     pub fg: u8,
     pub bg: u8,
@@ -71,6 +73,23 @@ impl Default for State {
 pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
     let mut bytes = [b' '; COLS];
     let mut warnings = Vec::new();
+    let cells: Vec<_> = cells
+        .iter()
+        .take(COLS)
+        .enumerate()
+        .map(|(column, cell)| {
+            let mut cell = *cell;
+            cell.ch &= 0x7f;
+            if cell.ch < 0x20 {
+                cell.ch = b' ';
+                warnings.push(CompileWarning {
+                    column,
+                    message: "control code in display character replaced with a space".into(),
+                });
+            }
+            cell
+        })
+        .collect();
     let mut state = State::default();
     for column in 0..COLS.min(cells.len()) {
         let target = cells[column];

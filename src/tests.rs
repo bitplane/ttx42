@@ -602,6 +602,59 @@ fn presentation_is_exactly_eighty_columns_and_keeps_flash() {
 }
 
 #[test]
+fn visual_compiler_replaces_control_glyphs_without_changing_following_state() {
+    for code in (0x00..=0x1f).chain(0x80..=0x9f) {
+        let row = [
+            VisualCell {
+                ch: code,
+                ..VisualCell::default()
+            },
+            VisualCell {
+                ch: b'X',
+                ..VisualCell::default()
+            },
+        ];
+        let compiled = compile_visual_row(&row);
+        assert_eq!(compiled.warnings.len(), 1);
+        assert_eq!(compiled.warnings[0].column, 0);
+        assert!(compiled.warnings[0].message.contains("control code"));
+        assert_eq!(&compiled.bytes[..2], b" X");
+        let grid = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        assert_eq!(
+            *grid.cell(0, 1).unwrap(),
+            crate::Cell {
+                ch: 'X',
+                ..crate::Cell::default()
+            }
+        );
+    }
+    let row = [
+        VisualCell {
+            ch: 0x81,
+            ..VisualCell::default()
+        },
+        VisualCell {
+            ch: b'X',
+            fg: 1,
+            ..VisualCell::default()
+        },
+    ];
+    let compiled = compile_visual_row(&row);
+    assert_eq!(&compiled.bytes[..2], &[0x01, b'X']);
+    assert_eq!(compiled.warnings.len(), 1);
+    assert_eq!(compiled.warnings[0].column, 0);
+    let printable = compile_visual_row(&[VisualCell {
+        ch: b'X' | 0x80,
+        ..VisualCell::default()
+    }]);
+    assert_eq!(printable.bytes[0], b'X');
+    assert!(printable.warnings.is_empty());
+}
+
+#[test]
 fn visual_compiler_keeps_set_at_background_in_the_requested_blank() {
     for (flash, double_height) in [(false, false), (true, false), (false, true)] {
         let mut row = [VisualCell::default(); 4];
