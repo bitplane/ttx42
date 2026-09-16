@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "encoding"]
 include = [
     "/src/**",
     "/examples/specimen.rs",
+    "/examples/corpus_gate.rs",
     "/tests/**",
     "/corpus/fetch.sh",
     "/Cargo.toml",
@@ -26,3 +27,7 @@ include = [
 [[example]]
 name = "specimen"
 path = "examples/specimen.rs"
+
+[[example]]
+name = "corpus_gate"
+path = "examples/corpus_gate.rs"
