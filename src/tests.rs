@@ -581,3 +581,63 @@ fn visual_compiler_reports_unfinished_background_transition_on_blank() {
     }
     assert_eq!(compiled.warnings.len(), 1);
 }
+
+#[test]
+fn t42_rejects_damaged_identities_without_misattributing_rows() {
+    fn header() -> [u8; 42] {
+        let mut packet = [b' '; 42];
+        for (byte, nibble) in packet.iter_mut().zip([1, 0, 3, 0, 4, 3, 2, 1, 0, 0]) {
+            *byte = encode_hamming84(nibble);
+        }
+        packet
+    }
+    fn row(magazine: u8, ch: u8) -> [u8; 42] {
+        let parity = if ch.count_ones() % 2 == 1 {
+            ch
+        } else {
+            ch | 0x80
+        };
+        let mut packet = [parity; 42];
+        packet[0] = encode_hamming84(magazine | 8);
+        packet[1] = encode_hamming84(0);
+        packet
+    }
+    for field in 2..8 {
+        for bit in 0..8 {
+            let mut corrected = header();
+            corrected[field] ^= 1 << bit;
+            let pages = Page::parse_t42(&corrected).unwrap();
+            assert_eq!(pages.len(), 1);
+            assert_eq!(pages[0].page_number(), Some(0x103));
+            assert_eq!(pages[0].subpage_number(), Some(0x1234));
+            for other in bit + 1..8 {
+                let mut damaged = corrected;
+                damaged[field] ^= 1 << other;
+                assert!(Page::parse_t42(&damaged).unwrap().is_empty());
+                let mut first = header();
+                first[2] = encode_hamming84(1);
+                let mut other_magazine = header();
+                other_magazine[0] = encode_hamming84(2);
+                let packets = [
+                    first,
+                    row(1, b'A'),
+                    other_magazine,
+                    damaged,
+                    row(1, b'B'),
+                    row(2, b'C'),
+                    header(),
+                    row(1, b'D'),
+                ];
+                let pages = Page::parse_t42(&packets.concat()).unwrap();
+                assert_eq!(pages.len(), 3);
+                assert_eq!(
+                    pages.iter().map(Page::page_number).collect::<Vec<_>>(),
+                    [Some(0x101), Some(0x203), Some(0x103)]
+                );
+                assert_eq!(pages[0].raw()[1][0], b'A');
+                assert_eq!(pages[1].raw()[1][0], b'C');
+                assert_eq!(pages[2].raw()[1][0], b'D');
+            }
+        }
+    }
+}

@@ -311,17 +311,31 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
             if let Some(page) = active.remove(&magazine) {
                 completed.push(page);
             }
-            let mut page = Page::default();
-            let units = hamming84(packet[2]).unwrap_or(0) as u16;
-            let tens = hamming84(packet[3]).unwrap_or(0) as u16;
-            page.number = Some(
-                ((if magazine == 0 { 8 } else { magazine }) as u16) * 0x100 + tens * 0x10 + units,
-            );
-            let s1 = hamming84(packet[4]).unwrap_or(0) as u16;
-            let s2 = hamming84(packet[5]).unwrap_or(0) as u16;
-            let s3 = hamming84(packet[6]).unwrap_or(0) as u16;
-            let s4 = hamming84(packet[7]).unwrap_or(0) as u16;
-            page.subpage = Some(s1 | ((s2 & 7) << 4) | (s3 << 8) | ((s4 & 3) << 12));
+            // A new header ends the previous page even if its identity is
+            // unreadable. Leave this magazine inactive until a valid header
+            // arrives so subsequent rows cannot contaminate another page.
+            let identity: [Option<u16>; 6] =
+                std::array::from_fn(|index| hamming84(packet[index + 2]).map(u16::from));
+            let [
+                Some(units),
+                Some(tens),
+                Some(s1),
+                Some(s2),
+                Some(s3),
+                Some(s4),
+            ] = identity
+            else {
+                continue;
+            };
+            let mut page = Page {
+                number: Some(
+                    ((if magazine == 0 { 8 } else { magazine }) as u16) * 0x100
+                        + tens * 0x10
+                        + units,
+                ),
+                subpage: Some(s1 | ((s2 & 7) << 4) | (s3 << 8) | ((s4 & 3) << 12)),
+                ..Page::default()
+            };
             for column in 8..40 {
                 page.bytes[0][column] = parity_data(packet[column + 2]);
             }
