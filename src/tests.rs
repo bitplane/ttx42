@@ -463,6 +463,32 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn tti_writes_five_digit_page_numbers_and_full_subcodes() {
+    for (subpage, suffix) in [
+        (0, "00"),
+        (1, "01"),
+        (0x10, "10"),
+        (0x79, "79"),
+        (0x99, "99"),
+        (0x0a, "00"),
+        (0x1279, "00"),
+        (0x3f7f, "00"),
+    ] {
+        let mut page = Page::default();
+        page.set_identity(0x2af, subpage);
+        let mut service = Service::default();
+        service.insert(page);
+        let output = service.to_tti();
+        assert!(output.starts_with(&format!("PN,2AF{suffix}\r\nSC,{subpage:04X}\r\n")));
+        let pn = output.lines().next().unwrap().strip_prefix("PN,").unwrap();
+        assert_eq!(pn.len(), 5);
+        // Vbit2 LoadTTI extracts the page by dropping the final two nibbles.
+        assert_eq!((u32::from_str_radix(pn, 16).unwrap() & 0xfff00) >> 8, 0x2af);
+        assert_eq!(Service::parse_tti(&output).unwrap(), service);
+    }
+}
+
+#[test]
 fn tti_preserves_unsupported_output_rows_without_displaying_them() {
     let mut input = b"PN,10001\r\nOL,1,VISIBLE\r\n".to_vec();
     for row in 25..=28 {

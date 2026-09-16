@@ -150,13 +150,22 @@ impl Service {
         }
         numbers.into_keys()
     }
+    /// Write canonical TTI. PN uses the five-digit `mppss` form; SC carries
+    /// the full subcode. Subcodes outside two BCD digits use `00` in PN.
     pub fn to_tti(&self) -> String {
         let mut out = String::new();
         for page in &self.pages {
             let number = page.number.unwrap_or(0x100);
             let subpage = page.subpage.unwrap_or(0);
+            // MRG PN has two decimal subpage digits. Vbit2 extracts the page
+            // by shifting past exactly those two digits; SC is authoritative.
+            let suffix = if subpage <= 0x99 && subpage & 0x0f <= 9 {
+                subpage
+            } else {
+                0
+            };
             out.push_str(&format!(
-                "PN,{number:03X}{subpage:04X}\r\nSC,{subpage:04X}\r\n"
+                "PN,{number:03X}{suffix:02X}\r\nSC,{subpage:04X}\r\n"
             ));
             for record in &page.records {
                 out.push_str(&record.key);
