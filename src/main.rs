@@ -69,7 +69,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             io::stdin().read_to_end(&mut bytes)?;
             bytes
         }
-        Some(path) => fs::read(path)?,
+        Some(path) => fs::read(path)
+            .map_err(|error| io::Error::new(error.kind(), format!("{path:?}: {error}")))?,
     };
     let format = format.unwrap_or_else(|| sniff(&bytes));
     let pages = match format {

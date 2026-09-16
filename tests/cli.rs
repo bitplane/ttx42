@@ -14,6 +14,22 @@ fn run(args: &[&str], input: &[u8]) -> Output {
 }
 
 #[test]
+fn file_read_errors_include_the_path_and_os_error() {
+    let path = format!(
+        "{}/target/ttx42-missing-input-{}/page.tti",
+        env!("CARGO_MANIFEST_DIR"),
+        std::process::id()
+    );
+    let expected = std::fs::read(&path).unwrap_err().to_string();
+    let result = run(&[&path], b"");
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(error.contains(&format!("{path:?}")), "{error}");
+    assert!(error.contains(&expected), "{error}");
+}
+
+#[test]
 fn legacy_tti_controls_render_like_escaped_controls() {
     let legacy = run(
         &["--format", "tti"],
