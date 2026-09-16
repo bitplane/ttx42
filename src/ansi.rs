@@ -91,7 +91,7 @@ fn cell_glyphs(cell: &crate::Cell, options: &AnsiOptions) -> String {
     } else {
         cell.ch
     };
-    let mosaic = cell.separated || char_mask(cell.ch).is_some_and(|mask| mask != 0);
+    let mosaic = char_mask(cell.ch).is_some_and(|mask| cell.separated || mask != 0);
     let mut output = String::new();
     if options.wide && mosaic {
         push_wide_mosaic(
@@ -107,7 +107,9 @@ fn cell_glyphs(cell: &crate::Cell, options: &AnsiOptions) -> String {
 }
 
 pub(crate) fn separated_char(ch: char, style: SeparatedStyle) -> char {
-    let mask = char_mask(ch).unwrap_or(0);
+    let Some(mask) = char_mask(ch) else {
+        return ch;
+    };
     if mask == 0 {
         return ' ';
     }

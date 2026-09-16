@@ -231,6 +231,30 @@ fn wide_ansi_uses_fullwidth_text_and_doubles_mosaics() {
 }
 
 #[test]
+fn separated_graphics_preserve_blast_through_and_following_alpha_text() {
+    let grid = decode(
+        &page_with_row(0, &[0x11, 0x1a, b'A', 0x07, b'B']),
+        &DecodeOptions::default(),
+    );
+    for separated in [
+        SeparatedStyle::Braille,
+        SeparatedStyle::Contiguous,
+        SeparatedStyle::Unicode16,
+    ] {
+        for wide in [false, true] {
+            let options = AnsiOptions { separated, wide };
+            let rendered = present(&grid, &options);
+            let (a, b) = if wide { ("Ａ", "Ｂ") } else { ("A", "B") };
+            assert_eq!(rendered[0][2].glyphs, a);
+            assert_eq!(rendered[0][4].glyphs, b);
+            let ansi = to_ansi(&grid, &options);
+            assert!(ansi.contains(a));
+            assert!(ansi.contains(b));
+        }
+    }
+}
+
+#[test]
 fn wide_mosaic_stretches_columns_instead_of_repeating_the_mask() {
     assert_eq!(crate::ansi::stretch_mask(1), (3, 0));
     assert_eq!(crate::ansi::stretch_mask(2), (0, 3));
