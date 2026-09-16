@@ -342,6 +342,7 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
     let mut active: HashMap<u8, (usize, Page)> = HashMap::new();
     let mut completed = Vec::new();
     let mut sequence = 0;
+    let mut serial_mode = false;
     for packet in bytes.chunks_exact(42) {
         let Some(a) = hamming84(packet[0]) else {
             continue;
@@ -356,12 +357,20 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
             continue;
         }
         if row == 0 {
-            if let Some(page) = active.remove(&magazine) {
+            // C11 is bit zero of the final Hamming-coded header nibble.
+            // Retain the last known mode if this control nibble is damaged.
+            let next_serial_mode = hamming84(packet[9])
+                .map(|flags| flags & 1 != 0)
+                .unwrap_or(serial_mode);
+            if serial_mode || next_serial_mode {
+                completed.extend(active.drain().map(|(_, page)| page));
+            } else if let Some(page) = active.remove(&magazine) {
                 completed.push(page);
             }
+            serial_mode = next_serial_mode;
             // A new header ends the previous page even if its identity is
-            // unreadable. Leave this magazine inactive until a valid header
-            // arrives so subsequent rows cannot contaminate another page.
+            // unreadable. Leave the affected magazines inactive until a valid
+            // header arrives so subsequent rows cannot contaminate a page.
             let identity: [Option<u16>; 6] =
                 std::array::from_fn(|index| hamming84(packet[index + 2]).map(u16::from));
             let [

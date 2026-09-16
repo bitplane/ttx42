@@ -928,6 +928,77 @@ fn visual_compiler_reports_unfinished_background_transition_on_blank() {
 }
 
 #[test]
+fn t42_serial_headers_close_other_magazines_even_at_damaged_boundaries() {
+    fn header(magazine: u8, serial: bool) -> [u8; 42] {
+        let mut packet = [b' '; 42];
+        for (byte, nibble) in
+            packet
+                .iter_mut()
+                .zip([magazine, 0, 0, 0, 0, 0, 0, 0, 0, u8::from(serial)])
+        {
+            *byte = encode_hamming84(nibble);
+        }
+        packet
+    }
+    fn row(magazine: u8, ch: u8) -> [u8; 42] {
+        let mut packet = [if ch.count_ones() % 2 == 1 {
+            ch
+        } else {
+            ch | 0x80
+        }; 42];
+        packet[0] = encode_hamming84(magazine | 8);
+        packet[1] = encode_hamming84(0);
+        packet
+    }
+    for variant in 0..5 {
+        let mut first = header(1, true);
+        first[9] ^= 1; // C11 must survive a correctable error.
+        let mut boundary = header(2, variant != 1);
+        match variant {
+            2 => boundary[2] ^= 3, // unreadable page identity
+            3 => boundary[9] ^= 3, // unreadable C11: retain serial mode
+            4 => {
+                boundary[2] = encode_hamming84(15);
+                boundary[3] = encode_hamming84(15);
+            }
+            _ => {}
+        }
+        let input = [
+            first,
+            row(1, b'A'),
+            boundary,
+            row(1, b'B'),
+            header(1, true),
+            row(1, b'C'),
+        ]
+        .concat();
+        let pages = Page::parse_t42(&input).unwrap();
+        assert_eq!(pages[0].raw()[1][0], b'A', "boundary variant {variant}");
+        assert_eq!(pages.last().unwrap().raw()[1][0], b'C');
+        assert_eq!(pages.len(), if matches!(variant, 2 | 4) { 2 } else { 3 });
+    }
+    // Entering serial mode also closes all outstanding parallel magazines.
+    let input = [
+        header(1, false),
+        row(1, b'A'),
+        header(2, false),
+        row(2, b'B'),
+        header(3, true),
+        row(1, b'C'),
+        row(2, b'D'),
+    ]
+    .concat();
+    let pages = Page::parse_t42(&input).unwrap();
+    assert_eq!(pages.len(), 3);
+    assert_eq!(pages[0].raw()[1][0], b'A');
+    assert_eq!(pages[1].raw()[1][0], b'B');
+    assert_eq!(
+        pages.iter().map(Page::page_number).collect::<Vec<_>>(),
+        [Some(0x100), Some(0x200), Some(0x300)]
+    );
+}
+
+#[test]
 fn t42_filler_headers_end_transmissions_without_becoming_pages() {
     fn header(magazine: u8, number: u8, subpage: u16) -> [u8; 42] {
         let mut packet = [b' '; 42];
