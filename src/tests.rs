@@ -457,17 +457,57 @@ fn visual_compiler_clears_conceal_without_changing_colour_or_mode() {
 }
 
 #[test]
-fn visual_compiler_reports_impossible_level_one_backgrounds() {
-    let mut row = [VisualCell::default(); 40];
-    row[1].fg = 1;
-    row[1].bg = 4;
-    row[1].ch = b'X';
+fn visual_compiler_supports_independent_foreground_and_background() {
+    for mosaic in [false, true] {
+        for fg in 0..8 {
+            for bg in 0..8 {
+                let mut row = [VisualCell::default(); 8];
+                row[7] = VisualCell {
+                    ch: b'X',
+                    fg,
+                    bg,
+                    mosaic,
+                    conceal: true,
+                    ..VisualCell::default()
+                };
+                let compiled = compile_visual_row(&row);
+                assert!(!compiled.warnings.iter().any(|warning| warning.column == 7));
+                let grid = decode(
+                    &page_with_row(0, &compiled.bytes),
+                    &DecodeOptions { reveal: true },
+                );
+                let cell = grid.cell(0, 7).unwrap();
+                assert_eq!(
+                    (cell.ch, cell.fg, cell.bg, cell.conceal),
+                    ('X', fg, bg, true)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn visual_compiler_completes_background_transition_without_spare_blanks() {
+    let row = [VisualCell {
+        ch: b'X',
+        fg: 1,
+        bg: 4,
+        ..VisualCell::default()
+    }; 8];
     let compiled = compile_visual_row(&row);
-    assert!(
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    let cell = grid.cell(0, 3).unwrap();
+    assert_eq!((cell.ch, cell.fg, cell.bg), ('X', 1, 4));
+    assert_eq!(
         compiled
             .warnings
             .iter()
-            .any(|warning| warning.column == 1 && warning.message.contains("background"))
+            .map(|warning| warning.column)
+            .collect::<Vec<_>>(),
+        [0, 1, 2]
     );
 }
 

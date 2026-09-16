@@ -72,14 +72,7 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
     let mut warnings = Vec::new();
     let mut state = State::default();
     for column in 0..COLS.min(cells.len()) {
-        let mut target = cells[column];
-        if target.bg != 0 && target.bg != target.fg {
-            warnings.push(CompileWarning {
-                column,
-                message: "Level 1 background must be black or the current foreground; using new background".into(),
-            });
-            target.bg = target.fg;
-        }
+        let target = cells[column];
         let controls = transition_controls(state, target);
         if controls.is_empty() {
             bytes[column] = target.ch & 0x7f;
@@ -159,6 +152,18 @@ fn state_for(cell: VisualCell) -> State {
 fn transition_controls(mut state: State, target: VisualCell) -> Vec<u8> {
     let target = state_for(target);
     let mut out = Vec::new();
+    // Background is latched independently of subsequent foreground changes.
+    // Establish it first so partial transitions also make forward progress.
+    if state.bg != target.bg {
+        if target.bg != 0 && state.fg != target.bg {
+            let colour = if target.mosaic { 0x10 } else { 0 } + target.bg;
+            out.push(colour);
+            apply_control(&mut state, colour);
+        }
+        let background = if target.bg == 0 { 0x1c } else { 0x1d };
+        out.push(background);
+        apply_control(&mut state, background);
+    }
     if state.mosaic != target.mosaic || state.fg != target.fg || (state.conceal && !target.conceal)
     {
         out.push(if target.mosaic {
@@ -178,15 +183,6 @@ fn transition_controls(mut state: State, target: VisualCell) -> Vec<u8> {
     }
     if state.separated != target.separated {
         out.push(if target.separated { 0x1a } else { 0x19 });
-    }
-    if state.bg != target.bg {
-        out.push(if target.bg == 0 {
-            0x1c
-        } else if target.bg == target.fg {
-            0x1d
-        } else {
-            0x1c
-        });
     }
     if !state.conceal && target.conceal {
         out.push(0x18);
