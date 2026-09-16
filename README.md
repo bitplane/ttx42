@@ -50,8 +50,10 @@ screenshot can replace this note after release preparation.
 
 ## Corpus
 
-`corpus/` is gitignored. Run `corpus/fetch.sh` to fetch a small public
-recovery sample used by the ignored smoke test.
+Run `./corpus/fetch.sh` to download a public recovery sample (about 23 MB),
+then `cargo test --test corpus -- --ignored` to run the corpus smoke test.
+The fetch script is tracked; downloaded samples are gitignored. Fetching
+requires `curl` and an internet connection.
 
 ## Prior art and authoring
 

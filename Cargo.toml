@@ -12,6 +12,7 @@ include = [
     "/src/**",
     "/examples/specimen.rs",
     "/tests/**",
+    "/corpus/fetch.sh",
     "/Cargo.toml",
     "/Cargo.lock",
     "/README.md",
