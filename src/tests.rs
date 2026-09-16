@@ -808,6 +808,24 @@ fn visual_compiler_reports_unfinished_background_transition_on_blank() {
 }
 
 #[test]
+fn t42_parsers_report_no_decodable_pages() {
+    for input in [&[][..], &[0xff; 42][..], &[0x15; 41][..]] {
+        assert_eq!(Page::parse_t42(input), Err(crate::Error::NoPages));
+        assert_eq!(Service::parse_t42(input), Err(crate::Error::NoPages));
+    }
+    let mut header = [b' '; 42];
+    for (byte, nibble) in header.iter_mut().zip([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]) {
+        *byte = encode_hamming84(nibble);
+    }
+    // A valid page is still returned when preceded by unrecoverable packets.
+    let mut input = vec![0xff; 42];
+    input.extend(header);
+    let pages = Page::parse_t42(&input).unwrap();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(Service::parse_t42(&input).unwrap().pages(), pages);
+}
+
+#[test]
 fn t42_rejects_damaged_identities_without_misattributing_rows() {
     fn header() -> [u8; 42] {
         let mut packet = [b' '; 42];
@@ -838,7 +856,7 @@ fn t42_rejects_damaged_identities_without_misattributing_rows() {
             for other in bit + 1..8 {
                 let mut damaged = corrected;
                 damaged[field] ^= 1 << other;
-                assert!(Page::parse_t42(&damaged).unwrap().is_empty());
+                assert_eq!(Page::parse_t42(&damaged), Err(crate::Error::NoPages));
                 let mut first = header();
                 first[2] = encode_hamming84(1);
                 let mut other_magazine = header();

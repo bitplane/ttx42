@@ -68,8 +68,14 @@ impl Page {
     pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
         parse_tti(bytes)
     }
+    /// Recover pages from T42 packets, or return `Error::NoPages` if none decode.
     pub fn parse_t42(bytes: &[u8]) -> Result<Vec<Self>, Error> {
-        Ok(parse_t42(bytes))
+        let pages = parse_t42(bytes);
+        if pages.is_empty() {
+            Err(Error::NoPages)
+        } else {
+            Ok(pages)
+        }
     }
     pub fn page_number(&self) -> Option<u16> {
         self.number
@@ -108,9 +114,10 @@ impl Service {
             pages: parse_tti(bytes)?,
         })
     }
+    /// Recover a service, or return `Error::NoPages` if no T42 pages decode.
     pub fn parse_t42(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self {
-            pages: parse_t42(bytes),
+            pages: Page::parse_t42(bytes)?,
         })
     }
     pub fn pages(&self) -> &[Page] {

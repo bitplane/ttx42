@@ -45,6 +45,18 @@ fn legacy_tti_controls_render_like_escaped_controls() {
 }
 
 #[test]
+fn undecodable_t42_input_reports_no_pages() {
+    for input in [&[][..], &[0xff; 42][..]] {
+        let result = run(&["--format", "t42"], input);
+        assert!(!result.status.success());
+        assert!(result.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("input contains no teletext pages")
+        );
+    }
+}
+
+#[test]
 fn t42_subpage_selection_without_page_number_is_respected() {
     // Two headers for page 100, subpages 1 and 2, encoded with Hamming 8/4.
     let mut input = Vec::new();
