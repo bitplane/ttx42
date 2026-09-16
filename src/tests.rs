@@ -463,6 +463,29 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn repeated_tti_display_rows_replace_old_text_and_attributes() {
+    for (replacement, expected) in [
+        (&b"X"[..], &b"X"[..]),
+        (&b""[..], &b""[..]),
+        (&b"\x81R"[..], &b"\x01R"[..]),
+    ] {
+        let mut input = b"PN,10000\r\nOL,1,HELLO\x1bARED\r\nOL,2,UNCHANGED\r\nOL,1,".to_vec();
+        input.extend(replacement);
+        input.extend(b"\r\n");
+        let service = Service::parse_tti_bytes(&input).unwrap();
+        let row = &service.pages()[0].raw()[1];
+        assert_eq!(&row[..expected.len()], expected);
+        assert!(row[expected.len()..].iter().all(|&byte| byte == b' '));
+        assert_eq!(&service.pages()[0].raw()[2][..9], b"UNCHANGED");
+        assert_eq!(Service::parse_tti(&service.to_tti()).unwrap(), service);
+    }
+    // Enhancement rows can have multiple designation codes; retain them all.
+    let service = Service::parse_tti("PN,10000\nOL,26,first\nOL,26,second\n").unwrap();
+    assert_eq!(service.pages()[0].preserved_records().len(), 2);
+    assert_eq!(Service::parse_tti(&service.to_tti()).unwrap(), service);
+}
+
+#[test]
 fn tti_export_normalizes_parity_bits_from_mutable_raw_data() {
     let mut page = Page::default();
     page.set_identity(0x100, 0);

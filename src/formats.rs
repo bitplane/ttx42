@@ -285,6 +285,9 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                     });
                     continue;
                 }
+                // A repeated display-row record replaces the entire row,
+                // including padding omitted by shorter or empty records.
+                page.bytes[row].fill(b' ');
                 for (column, byte) in decoded.into_iter().take(COLS).enumerate() {
                     page.bytes[row][column] = byte;
                 }
