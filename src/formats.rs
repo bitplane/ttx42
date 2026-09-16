@@ -86,6 +86,7 @@ impl Page {
     pub fn raw(&self) -> &[[u8; COLS]; ROWS] {
         &self.bytes
     }
+    /// Edit display bytes. Decoding and TTI export ignore the high parity bit.
     pub fn raw_mut(&mut self) -> &mut [[u8; COLS]; ROWS] {
         &mut self.bytes
     }
@@ -189,7 +190,7 @@ impl Service {
             for (row, bytes) in page.bytes.iter().enumerate() {
                 let end = bytes
                     .iter()
-                    .rposition(|byte| *byte != b' ')
+                    .rposition(|byte| byte & 0x7f != b' ')
                     .map_or(0, |index| index + 1);
                 if end == 0 {
                     continue;
@@ -313,6 +314,7 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
 fn encode_tti_line(data: &[u8]) -> String {
     let mut output = String::new();
     for &byte in data {
+        let byte = byte & 0x7f;
         if byte < 0x20 {
             output.push('\x1b');
             output.push((byte + 0x40) as char);

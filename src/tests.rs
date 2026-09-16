@@ -463,6 +463,36 @@ fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
 }
 
 #[test]
+fn tti_export_normalizes_parity_bits_from_mutable_raw_data() {
+    let mut page = Page::default();
+    page.set_identity(0x100, 0);
+    for (cell, byte) in page.raw_mut().iter_mut().flatten().zip(0..=255u8) {
+        *cell = byte;
+    }
+    page.raw_mut()[24].fill(b' ' | 0x80);
+    let before = decode(&page, &DecodeOptions { reveal: true });
+    let mut service = Service::default();
+    service.insert(page.clone());
+    let output = service.to_tti();
+    assert!(output.is_ascii());
+    assert!(!output.contains("OL,24,"));
+    let restored = Service::parse_tti(&output).unwrap();
+    for (original, normalized) in page
+        .raw()
+        .iter()
+        .flatten()
+        .zip(restored.pages()[0].raw().iter().flatten())
+    {
+        assert_eq!(original & 0x7f, *normalized);
+    }
+    assert_eq!(
+        decode(&restored.pages()[0], &DecodeOptions { reveal: true }),
+        before
+    );
+    assert_eq!(restored.to_tti(), output);
+}
+
+#[test]
 fn tti_writes_five_digit_page_numbers_and_full_subcodes() {
     for (subpage, suffix) in [
         (0, "00"),
