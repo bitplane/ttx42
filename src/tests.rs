@@ -149,6 +149,59 @@ fn octant_digits_zero_and_one_have_clean_shapes() {
 }
 
 #[test]
+fn wide_double_height_mosaics_stretch_each_segment_vertically() {
+    // Each original mosaic row occupies two rows across the pair of cells.
+    let cases = [
+        (0, 0, 0),
+        (1, 5, 0),
+        (2, 10, 0),
+        (4, 16, 1),
+        (8, 32, 2),
+        (16, 0, 20),
+        (32, 0, 40),
+        (21, 21, 21),
+        (42, 42, 42),
+        (63, 63, 63),
+    ];
+    for separated in [false, true] {
+        for style in [
+            SeparatedStyle::Braille,
+            SeparatedStyle::Contiguous,
+            SeparatedStyle::Unicode16,
+        ] {
+            let options = AnsiOptions {
+                wide: true,
+                separated: style,
+            };
+            for (mask, top_mask, bottom_mask) in cases {
+                let mode = if separated { 0x1a } else { 0x19 };
+                let page = page_with_row(0, &[0x11, mode, 0x0d, crate::mosaic_code(mask)]);
+                let rendered = present(&decode(&page, &DecodeOptions::default()), &options);
+                let expected_page = page_with_row(
+                    0,
+                    &[
+                        0x11,
+                        mode,
+                        crate::mosaic_code(top_mask),
+                        crate::mosaic_code(bottom_mask),
+                    ],
+                );
+                let expected =
+                    present(&decode(&expected_page, &DecodeOptions::default()), &options);
+                assert_eq!(
+                    rendered[0][3].glyphs, expected[0][2].glyphs,
+                    "top mask={mask}, separated={separated}, style={style:?}"
+                );
+                assert_eq!(
+                    rendered[1][3].glyphs, expected[0][3].glyphs,
+                    "bottom mask={mask}, separated={separated}, style={style:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn wide_ansi_renders_both_halves_of_double_height_text() {
     let grid = decode(&page_with_row(0, &[0x0d, b'T']), &DecodeOptions::default());
     let glyph = crate::saa5050::glyph('T').unwrap();

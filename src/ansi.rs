@@ -77,6 +77,20 @@ pub fn to_ansi(grid: &Grid, options: &AnsiOptions) -> String {
 
 fn cell_glyphs(cell: &crate::Cell, options: &AnsiOptions) -> String {
     if options.wide
+        && let Some(mask) = char_mask(cell.ch).filter(|&mask| cell.separated || mask != 0)
+    {
+        // Double each of the three mosaic rows across two terminal rows:
+        // the top half contains rows A, A, B; the bottom contains B, C, C.
+        let mask = match cell.size {
+            CellSize::Normal => mask,
+            CellSize::DoubleTop => (mask & 3) | ((mask & 3) << 2) | ((mask & 12) << 2),
+            CellSize::DoubleBottom => ((mask & 12) >> 2) | ((mask & 48) >> 2) | (mask & 48),
+        };
+        let mut output = String::new();
+        push_wide_mosaic(&mut output, mask, cell.separated, options.separated);
+        return output;
+    }
+    if options.wide
         && matches!(cell.size, CellSize::DoubleTop | CellSize::DoubleBottom)
         && let Some(glyph) = crate::saa5050::glyph(cell.ch)
     {
@@ -91,18 +105,8 @@ fn cell_glyphs(cell: &crate::Cell, options: &AnsiOptions) -> String {
     } else {
         cell.ch
     };
-    let mosaic = char_mask(cell.ch).is_some_and(|mask| cell.separated || mask != 0);
     let mut output = String::new();
-    if options.wide && mosaic {
-        push_wide_mosaic(
-            &mut output,
-            char_mask(cell.ch).unwrap_or(0),
-            cell.separated,
-            options.separated,
-        );
-    } else {
-        push_cell(&mut output, ch, options.wide);
-    }
+    push_cell(&mut output, ch, options.wide);
     output
 }
 
