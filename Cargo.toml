@@ -2,6 +2,7 @@
 name = "ttx42"
 version = "0.4.0"
 edition = "2024"
+rust-version = "1.88"
 autoexamples = false
 license = "WTFPL"
 description = "Decode Level 1 broadcast teletext and render it as ANSI terminal cells"
