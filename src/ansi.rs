@@ -145,7 +145,9 @@ fn push_cell(output: &mut String, ch: char, wide: bool) {
 fn push_wide_mosaic(output: &mut String, mask: u8, separated: bool, style: SeparatedStyle) {
     let (left, right) = stretch_mask(mask);
     for mask in [left, right] {
-        output.push(if separated {
+        output.push(if mask == 0 {
+            ' '
+        } else if separated {
             match style {
                 SeparatedStyle::Braille => braille(mask),
                 SeparatedStyle::Contiguous => crate::decode::sextant(mask),

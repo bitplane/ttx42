@@ -149,6 +149,30 @@ fn octant_digits_zero_and_one_have_clean_shapes() {
 }
 
 #[test]
+fn separated_blanks_are_spaces_in_every_presentation_mode() {
+    // Separated graphics, a mosaic with an empty right half, then alpha text.
+    let page = page_with_row(0, &[0x11, 0x1a, b' ', 0x21, 0x07, b'A', b' ']);
+    let grid = decode(&page, &DecodeOptions::default());
+    for wide in [false, true] {
+        for separated in [
+            SeparatedStyle::Braille,
+            SeparatedStyle::Contiguous,
+            SeparatedStyle::Unicode16,
+        ] {
+            let options = AnsiOptions { wide, separated };
+            let rendered = present(&grid, &options);
+            let blank = if wide { "  " } else { " " };
+            assert_eq!(rendered[0][2].glyphs, blank);
+            assert_eq!(rendered[0][6].glyphs, blank);
+            if wide {
+                assert!(rendered[0][3].glyphs.ends_with(' '));
+            }
+            assert!(!to_ansi(&grid, &options).contains('\u{2800}'));
+        }
+    }
+}
+
+#[test]
 fn wide_double_height_mosaics_stretch_each_segment_vertically() {
     // Each original mosaic row occupies two rows across the pair of cells.
     let cases = [
