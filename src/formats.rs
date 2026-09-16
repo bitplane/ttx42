@@ -319,7 +319,7 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
             let s2 = hamming84(packet[5]).unwrap_or(0) as u16;
             let s3 = hamming84(packet[6]).unwrap_or(0) as u16;
             let s4 = hamming84(packet[7]).unwrap_or(0) as u16;
-            page.subpage = Some(s1 | (s2 << 4) | ((s3 & 7) << 8) | ((s4 & 3) << 11));
+            page.subpage = Some(s1 | ((s2 & 7) << 4) | (s3 << 8) | ((s4 & 3) << 12));
             for column in 8..40 {
                 page.bytes[0][column] = parity_data(packet[column + 2]);
             }

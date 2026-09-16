@@ -343,6 +343,32 @@ fn t42_assembles_interleaved_magazines_and_survives_garbage() {
 }
 
 #[test]
+fn t42_subpages_preserve_all_digits_and_exclude_header_flags() {
+    for subpage in [0x0000u16, 0x0001, 0x0070, 0x0800, 0x1000, 0x3f7f] {
+        for flags in 0..8 {
+            let mut packet = [b' '; 42];
+            let nibbles = [
+                1,
+                0,
+                0,
+                0,
+                (subpage & 15) as u8,
+                ((subpage >> 4) & 7) as u8 | ((flags & 1) << 3),
+                ((subpage >> 8) & 15) as u8,
+                ((subpage >> 12) & 3) as u8 | ((flags >> 1) << 2),
+                0,
+                0,
+            ];
+            for (byte, nibble) in packet.iter_mut().zip(nibbles) {
+                *byte = encode_hamming84(nibble);
+            }
+            let pages = Page::parse_t42(&packet).unwrap();
+            assert_eq!(pages[0].subpage_number(), Some(subpage));
+        }
+    }
+}
+
+#[test]
 fn service_round_trips_subpages_fasttext_and_unknown_records() {
     let input = "PN,2000001\r\nSC,0001\r\nDE,kept\r\nFL,201,202,203,204,205,100\r\nOL,1,\x1bAHELLO\r\nPN,2000002\r\nSC,0002\r\nOL,1,WORLD\r\n";
     let service = Service::parse_tti(input).unwrap();
