@@ -163,7 +163,7 @@ fn decode_row(bytes: &[u8; COLS], options: &DecodeOptions) -> [Cell; COLS] {
         } else if state.mosaic && !(0x40..=0x5f).contains(&code) {
             let mask = mosaic_mask(code).unwrap_or(0);
             cell.ch = sextant(mask);
-            state.held = (code & 0x20 != 0).then_some(Held {
+            state.held = Some(Held {
                 ch: cell.ch,
                 separated: state.separated,
             });
