@@ -19,7 +19,7 @@ pub struct VisualCell {
     pub conceal: bool,
     /// Interpret the display code in G1 mosaic mode, including alpha capitals.
     pub mosaic: bool,
-    /// Request gaps between mosaic blocks.
+    /// Request gaps between mosaic blocks. Ignored when mosaic mode is off.
     pub separated: bool,
     /// Request the upper half of a double-height character or blank.
     pub double_height: bool,
@@ -326,7 +326,7 @@ fn transition_controls(mut state: State, cell: VisualCell, appearance: Option<St
     if state.double_height != target.double_height {
         out.push(if target.double_height { 0x0d } else { 0x0c });
     }
-    if state.separated != target.separated {
+    if target.mosaic && state.separated != target.separated {
         out.push(if target.separated { 0x1a } else { 0x19 });
     }
     if !state.conceal && target.conceal {

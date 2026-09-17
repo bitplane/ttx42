@@ -1365,3 +1365,36 @@ fn tti_dos_eof_marker_is_not_exported_as_a_record() {
     let service = Service::parse_tti("PN,10000\nOL,1,A\x1aB\n").unwrap();
     assert!(service.to_tti().contains("OL,1,A\x1bZB"));
 }
+
+#[test]
+fn visual_compiler_ignores_separation_on_alpha_text() {
+    let row = [VisualCell {
+        ch: b'A',
+        separated: true,
+        ..VisualCell::default()
+    }; 40];
+    let compiled = compile_visual_row(&row);
+    assert_eq!(compiled.bytes, [b'A'; 40]);
+    assert!(compiled.warnings.is_empty());
+    let mut row = [VisualCell::default(); 8];
+    row[2] = VisualCell {
+        ch: 0x7f,
+        mosaic: true,
+        separated: true,
+        ..VisualCell::default()
+    };
+    row[4].ch = b'A';
+    row[7] = VisualCell {
+        separated: false,
+        ..row[2]
+    };
+    let compiled = compile_visual_row(&row);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+    assert!(grid.cell(0, 2).unwrap().separated);
+    assert_eq!(grid.cell(0, 4).unwrap().ch, 'A');
+    assert!(!grid.cell(0, 7).unwrap().separated);
+}
