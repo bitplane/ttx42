@@ -96,8 +96,8 @@ impl Default for State {
 /// Control codes supplied as glyphs become spaces with warnings. Blank cells
 /// constrain only background and double height. The compiler ignores the
 /// supplied remaining attributes and may set them to prepare later text.
-/// The compiler is greedy and does not
-/// use hold mosaics or guarantee the smallest possible number of controls.
+/// The compiler is greedy and does not use hold mosaics or guarantee the
+/// smallest possible number of controls.
 ///
 /// ```
 /// use ttx42::{VisualCell, compile_visual_row};

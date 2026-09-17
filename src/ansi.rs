@@ -9,9 +9,9 @@ pub struct PresentationCell {
     pub glyphs: String,
     /// Intended terminal-column width: one in narrow mode, two in wide mode.
     pub width: u8,
-    /// Foreground colour index, 0–7.
+    /// Foreground colour index, 0 to 7.
     pub fg: u8,
-    /// Background colour index, 0–7.
+    /// Background colour index, 0 to 7.
     pub bg: u8,
     /// Flash attribute for consumers that provide animation.
     pub flash: bool,
@@ -45,7 +45,7 @@ pub fn present(grid: &Grid, options: &AnsiOptions) -> PresentationGrid {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 /// Glyph family used for separated mosaic graphics.
 pub enum SeparatedStyle {
-    /// Braille dots, with the bottom dot row repeated for aspect ratio (default).
+    /// Braille dots, with the bottom dot row repeated for aspect ratio.
     #[default]
     Braille,
     /// Contiguous sextants, discarding separation gaps.

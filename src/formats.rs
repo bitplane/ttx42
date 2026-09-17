@@ -67,7 +67,7 @@ impl Default for Page {
 
 impl Page {
     /// Read row-major display bytes, stripping the high parity bit.
-    /// A 1000-byte buffer supplies rows 0–24; 960 bytes supply rows 1–24 and
+    /// A 1000-byte buffer supplies rows 0 to 24; 960 bytes supply rows 1 to 24 and
     /// leave the header blank. This does not infer a page identity.
     ///
     /// # Errors
@@ -226,7 +226,7 @@ impl Service {
     /// Output uses CRLF, ESC-escaped controls and seven-bit display bytes.
     /// Trailing display-row spaces and completely blank display rows are
     /// omitted. Missing page identity becomes `0x100`, subcode zero.
-    /// Leading file records (including DE, DS and SP) belong to the first
+    /// Leading file records, including DE, DS and SP, belong to the first
     /// parsed page and are emitted after that page's PN and SC records.
     /// Unsupported OL records retain their full normalized payloads. Output
     /// preserves supported page content and metadata, not original formatting.

@@ -17,9 +17,9 @@ pub enum CellSize {
 pub struct Cell {
     /// UK G0 character or Unicode contiguous sextant; concealed text may be blank.
     pub ch: char,
-    /// Foreground colour index, 0–7; see the crate-level colour table.
+    /// Foreground colour index, 0 to 7; see the crate-level colour table.
     pub fg: u8,
-    /// Background colour index, 0–7.
+    /// Background colour index, 0 to 7.
     pub bg: u8,
     /// Whether the cell is marked for flashing; decoding does not animate it.
     pub flash: bool,
