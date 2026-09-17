@@ -3,7 +3,8 @@ use crate::formats::COLS;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// One requested authoring cell, expressed as a seven-bit teletext code and
 /// attributes. Defaults to a normal white-on-black alpha space. On spaces only
-/// background and height are requirements; other attributes are ignored.
+/// background and double height are requirements. The compiler ignores the
+/// supplied remaining attributes and may set them to prepare later text.
 pub struct VisualCell {
     /// Seven-bit display code. The parity bit is ignored; control codes are
     /// replaced by spaces with a warning rather than interpreted as attributes.
@@ -89,8 +90,9 @@ impl Default for State {
 ///
 /// Only the first 40 input cells are used; shorter inputs are space-padded.
 /// Control codes supplied as glyphs become spaces with warnings. Blank cells
-/// constrain only background and double height; their remaining attributes
-/// may be used to prepare later text. The compiler is greedy and does not
+/// constrain only background and double height. The compiler ignores the
+/// supplied remaining attributes and may set them to prepare later text.
+/// The compiler is greedy and does not
 /// use hold mosaics or guarantee the smallest possible number of controls.
 ///
 /// ```
