@@ -18,6 +18,8 @@ with open('calls.jsonl', 'a') as log:
     log.write(json.dumps([command, version]) + '\\n')
 if os.environ.get('FAIL_COMMAND') and command.startswith(os.environ['FAIL_COMMAND']):
     sys.exit(1)
+if command.startswith('cargo doc') and os.environ.get('RUSTDOCFLAGS') != '-D warnings':
+    sys.exit('documentation warnings must fail the release')
 if command.startswith('git rev-parse'):
     sys.exit(1)
 if command.startswith('cargo check'):
@@ -50,6 +52,8 @@ class ReleaseRecipe(unittest.TestCase):
                 for name, original in originals.items():
                     self.assertEqual((root / name).read_text(), original)
                 self.assertFalse(any(command.startswith(("git tag", "git push")) for command, _ in calls))
+                if failure.startswith(("cargo test", "cargo doc")):
+                    self.assertFalse(any(command.startswith(("cargo publish", "git commit")) for command, _ in calls))
             else:
                 self.assertEqual(result.returncode, 0, result.stderr)
                 commands = [command for command, _ in calls]
@@ -58,17 +62,26 @@ class ReleaseRecipe(unittest.TestCase):
                 tag = next(i for i, command in enumerate(commands) if command.startswith("git tag"))
                 self.assertLess(validation, commit)
                 self.assertLess(commit, tag)
+                for check in ["cargo test --locked --doc", "cargo doc --locked --no-deps"]:
+                    self.assertIn(check, commands)
+                    self.assertLess(commands.index(check), validation)
                 old_version = re.search(r'^version = "(.*?)"', originals["Cargo.toml"], re.M)[1]
                 major, minor, patch = map(int, old_version.split("."))
                 new_version = f"{major}.{minor}.{patch + 1}"
                 for command, version in calls:
-                    if command.startswith(("cargo fmt", "cargo clippy", "cargo test")):
+                    if command.startswith(("cargo fmt", "cargo clippy", "cargo test", "cargo doc")):
                         self.assertEqual(version, old_version)
                     if command.startswith("cargo publish"):
                         self.assertEqual(version, new_version)
 
     def test_preflight_failure_leaves_versions_unchanged(self):
         self.exercise("cargo test")
+
+    def test_doctest_failure_stops_before_version_bump(self):
+        self.exercise("cargo test --locked --doc")
+
+    def test_documentation_failure_stops_before_version_bump(self):
+        self.exercise("cargo doc")
 
     def test_package_failure_restores_versions(self):
         self.exercise("cargo publish")

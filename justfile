@@ -23,6 +23,8 @@ release:
     cargo fmt --check
     cargo clippy --locked --all-targets -- -D warnings
     cargo test --locked --all-targets
+    cargo test --locked --doc
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
     # Keep failed package validation or commits from leaving a version bump.
     backup=$(mktemp -d)
     cp Cargo.toml Cargo.lock "$backup/"
