@@ -1,21 +1,33 @@
 use crate::formats::{COLS, Page, ROWS};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// A cell's vertical position within a normal or double-height character.
 pub enum CellSize {
+    /// A normal-height character or blank.
     #[default]
     Normal,
+    /// Upper half of a double-height character.
     DoubleTop,
+    /// Synthesized lower half; the transmitted row underneath is suppressed.
     DoubleBottom,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// A decoded display cell. Defaults to a steady white-on-black space.
 pub struct Cell {
+    /// UK G0 character or Unicode contiguous sextant; concealed text may be blank.
     pub ch: char,
+    /// Foreground colour index, 0–7; see the crate-level colour table.
     pub fg: u8,
+    /// Background colour index, 0–7.
     pub bg: u8,
+    /// Whether the cell is marked for flashing; decoding does not animate it.
     pub flash: bool,
+    /// Conceal attribute, retained even when decoding with reveal enabled.
     pub conceal: bool,
+    /// Normal height or the upper/lower half of a double-height character.
     pub size: CellSize,
+    /// Separated-graphics state; only affects mosaic glyph presentation.
     pub separated: bool,
 }
 
@@ -34,21 +46,26 @@ impl Default for Cell {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A decoded 25×40 display, including synthesized double-height lower halves.
 pub struct Grid {
     cells: [[Cell; COLS]; ROWS],
 }
 
 impl Grid {
+    /// Borrow all cells in top-to-bottom, left-to-right order.
     pub fn rows(&self) -> &[[Cell; COLS]; ROWS] {
         &self.cells
     }
+    /// Return a zero-based cell, or `None` if either coordinate is out of bounds.
     pub fn cell(&self, row: usize, column: usize) -> Option<&Cell> {
         self.cells.get(row)?.get(column)
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// Decoder settings; by default concealed characters become spaces.
 pub struct DecodeOptions {
+    /// Preserve concealed glyphs in the grid while retaining their conceal flag.
     pub reveal: bool,
 }
 
@@ -87,6 +104,11 @@ impl Default for State {
     }
 }
 
+/// Decode UK Level 1 display bytes, resetting attributes at each row.
+///
+/// Ignores parity bits. Double-height rows synthesize lower halves and suppress
+/// the following transmitted row. Enhancements and header display flags are
+/// not interpreted. Flash remains metadata rather than animation.
 pub fn decode(page: &Page, options: &DecodeOptions) -> Grid {
     let mut cells = [[Cell::default(); COLS]; ROWS];
     let mut suppressed = [false; ROWS];
@@ -213,6 +235,9 @@ fn set_size(state: &mut State, double: bool) {
     state.double = double;
 }
 
+/// Convert a seven-bit G1 mosaic code to its six-bit pattern, or `None` for
+/// codes outside `0x20..=0x3f` and `0x60..=0x7f`. Bits 0/1 are the top
+/// left/right blocks, 2/3 the middle blocks, and 4/5 the bottom blocks.
 pub fn mosaic_mask(code: u8) -> Option<u8> {
     match code {
         0x20..=0x3f => Some(code - 0x20),
@@ -221,6 +246,8 @@ pub fn mosaic_mask(code: u8) -> Option<u8> {
     }
 }
 
+/// Convert the low six bits of a mosaic pattern to a seven-bit G1 code.
+/// See [`mosaic_mask`] for the bit layout. High input bits are ignored.
 pub fn mosaic_code(mask: u8) -> u8 {
     let mask = mask & 0x3f;
     if mask < 32 {

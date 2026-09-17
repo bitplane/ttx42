@@ -6,6 +6,8 @@ pub const ROWS: usize = 25;
 pub const COLS: usize = 40;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A 25×40 grid of display bytes with optional page identity and TTI metadata.
+/// The default page is blank and has no identity or links.
 pub struct Page {
     pub(crate) bytes: [[u8; COLS]; ROWS],
     number: Option<u16>,
@@ -15,22 +17,36 @@ pub struct Page {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A retained TTI record, including unknown commands and unsupported OL rows.
 pub struct TtiRecord {
+    /// Command name, such as `DE`, `DS`, or `OL`.
     pub key: String,
+    /// Everything after the command's first comma, excluding the line ending.
     pub value: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// Six TTI Fasttext destination page numbers, such as `0x100`; zero means
+/// no link. All links default to zero. T42 packet links are not yet recovered.
 pub struct FastTextLinks {
+    /// Red-key destination.
     pub red: u16,
+    /// Green-key destination.
     pub green: u16,
+    /// Yellow-key destination.
     pub yellow: u16,
+    /// Cyan-key destination.
     pub cyan: u16,
+    /// Fifth destination in an FL record.
     pub extra: u16,
+    /// Index-key destination.
     pub index: u16,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// An ordered collection of pages or recovered transmissions. Parsing keeps
+/// input order and duplicates; [`Service::insert`] sorts by identity. Defaults
+/// to an empty collection. Repeated T42 transmissions are not merged.
 pub struct Service {
     pages: Vec<Page>,
 }
@@ -48,6 +64,12 @@ impl Default for Page {
 }
 
 impl Page {
+    /// Read row-major display bytes, stripping the high parity bit.
+    /// A 1000-byte buffer supplies rows 0–24; 960 bytes supply rows 1–24 and
+    /// leave the header blank. This does not infer a page identity.
+    ///
+    /// # Errors
+    /// Returns [`Error::InvalidRawLength`] for any other buffer length.
     pub fn from_raw(bytes: &[u8]) -> Result<Self, Error> {
         let start_row = match bytes.len() {
             960 => 1,
@@ -61,14 +83,29 @@ impl Page {
         Ok(page)
     }
 
+    /// Parse TTI text containing ASCII display codes and ESC-escaped controls.
+    /// Returns pages in input order. Use [`Self::parse_tti_bytes`] for legacy
+    /// files with raw high-bit controls. Errors match that method.
     pub fn parse_tti(text: &str) -> Result<Vec<Self>, Error> {
         Self::parse_tti_bytes(text.as_bytes())
     }
     /// Parse TTI files, preserving legacy high-bit controls in output lines.
+    /// Supports LF/CRLF lines and ESC escapes. Non-display metadata is decoded
+    /// as UTF-8 with replacement for invalid sequences. Repeated display rows
+    /// replace earlier rows; unsupported OL rows are retained as records.
+    ///
+    /// # Errors
+    /// Returns [`Error::InvalidTti`] for malformed PN or OL records, or
+    /// [`Error::NoPages`] if no page is found. Malformed SC values become an
+    /// unspecified subpage; malformed FL destinations become zero.
     pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
         parse_tti(bytes)
     }
     /// Recover pages from T42 packets, or return `Error::NoPages` if none decode.
+    /// Corrects single-bit Hamming errors, blanks bad-parity display bytes,
+    /// and ignores incomplete trailing packets. Handles serial/parallel page
+    /// boundaries and filler headers. Output follows header arrival order and
+    /// retains repeated transmissions. Packet 27 Fasttext links are not decoded.
     pub fn parse_t42(bytes: &[u8]) -> Result<Vec<Self>, Error> {
         let pages = parse_t42(bytes);
         if pages.is_empty() {
@@ -77,12 +114,16 @@ impl Page {
             Ok(pages)
         }
     }
+    /// Page address, such as `Some(0x100)`, or `None` when unspecified.
     pub fn page_number(&self) -> Option<u16> {
         self.number
     }
+    /// Full subcode, such as `Some(0x0010)`, or `None` when unspecified.
+    /// Service lookup methods treat `None` as zero.
     pub fn subpage_number(&self) -> Option<u16> {
         self.subpage
     }
+    /// Borrow all 25 rows of 40 display bytes, including header row zero.
     pub fn raw(&self) -> &[[u8; COLS]; ROWS] {
         &self.bytes
     }
@@ -90,48 +131,62 @@ impl Page {
     pub fn raw_mut(&mut self) -> &mut [[u8; COLS]; ROWS] {
         &mut self.bytes
     }
+    /// Set page number and full subcode without validation. Use page numbers
+    /// `0x100..=0x8fe` excluding `xFF`, and subcodes fitting mask `0x3f7f`.
     pub fn set_identity(&mut self, number: u16, subpage: u16) {
         self.number = Some(number);
         self.subpage = Some(subpage);
     }
+    /// Return the TTI Fasttext links, if present.
     pub fn fasttext(&self) -> Option<FastTextLinks> {
         self.fasttext
     }
+    /// Replace Fasttext links, or remove them with `None`.
     pub fn set_fasttext(&mut self, links: Option<FastTextLinks>) {
         self.fasttext = links;
     }
+    /// Borrow retained metadata and unsupported output-row records in order.
     pub fn preserved_records(&self) -> &[TtiRecord] {
         &self.records
     }
 }
 
 impl Service {
+    /// Parse an ordered service from TTI text; see [`Page::parse_tti`] for
+    /// supported encodings and errors.
     pub fn parse_tti(text: &str) -> Result<Self, Error> {
         Self::parse_tti_bytes(text.as_bytes())
     }
     /// Parse TTI files, preserving legacy high-bit controls in output lines.
+    /// See [`Page::parse_tti_bytes`] for format handling and errors.
     pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self {
             pages: parse_tti(bytes)?,
         })
     }
     /// Recover a service, or return `Error::NoPages` if no T42 pages decode.
+    /// See [`Page::parse_t42`] for recovery behavior and limitations.
     pub fn parse_t42(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self {
             pages: Page::parse_t42(bytes)?,
         })
     }
+    /// Borrow all pages in their current order, including duplicates.
     pub fn pages(&self) -> &[Page] {
         &self.pages
     }
+    /// Edit pages directly. Mutations do not automatically sort or deduplicate.
     pub fn pages_mut(&mut self) -> &mut Vec<Page> {
         &mut self.pages
     }
+    /// Append a page, then stably sort by page number and subcode, treating
+    /// unspecified identities as zero. Existing duplicates are retained.
     pub fn insert(&mut self, page: Page) {
         self.pages.push(page);
         self.pages
             .sort_by_key(|page| (page.number.unwrap_or(0), page.subpage.unwrap_or(0)));
     }
+    /// Remove and return the first matching page; unspecified subcodes match zero.
     pub fn remove(&mut self, number: u16, subpage: u16) -> Option<Page> {
         let index = self
             .pages
@@ -139,16 +194,19 @@ impl Service {
             .position(|page| page.number == Some(number) && page.subpage.unwrap_or(0) == subpage)?;
         Some(self.pages.remove(index))
     }
+    /// Find the first matching page; unspecified subcodes match zero.
     pub fn page(&self, number: u16, subpage: u16) -> Option<&Page> {
         self.pages
             .iter()
             .find(|page| page.number == Some(number) && page.subpage.unwrap_or(0) == subpage)
     }
+    /// Iterate over all entries for a page number, preserving their current order.
     pub fn subpages(&self, number: u16) -> impl Iterator<Item = &Page> {
         self.pages
             .iter()
             .filter(move |page| page.number == Some(number))
     }
+    /// Iterate over distinct known page numbers in ascending order.
     pub fn page_numbers(&self) -> impl Iterator<Item = u16> + '_ {
         let mut numbers = BTreeSet::new();
         for page in &self.pages {
@@ -160,6 +218,14 @@ impl Service {
     }
     /// Write canonical TTI. PN uses the five-digit `mppss` form; SC carries
     /// the full subcode. Subcodes outside two BCD digits use `00` in PN.
+    ///
+    /// Output uses CRLF, ESC-escaped controls and seven-bit display bytes.
+    /// Trailing display-row spaces and completely blank display rows are
+    /// omitted. Missing page identity becomes `0x100`, subcode zero.
+    /// Leading file records (including DE, DS and SP) belong to the first
+    /// parsed page and are emitted after that page's PN and SC records.
+    /// Unsupported OL records retain their full normalized payloads. Output
+    /// preserves supported page content and metadata, not original formatting.
     pub fn to_tti(&self) -> String {
         let mut out = String::new();
         for page in &self.pages {

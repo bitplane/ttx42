@@ -1,16 +1,26 @@
 use crate::formats::COLS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// One requested authoring cell, expressed as a seven-bit teletext code and
+/// attributes. Defaults to a normal white-on-black alpha space. On spaces only
+/// background and height are requirements; other attributes are ignored.
 pub struct VisualCell {
     /// Seven-bit display code. The parity bit is ignored; control codes are
     /// replaced by spaces with a warning rather than interpreted as attributes.
     pub ch: u8,
+    /// Foreground colour index; values above 7 are clamped to 7.
     pub fg: u8,
+    /// Background colour index; values above 7 are clamped to 7.
     pub bg: u8,
+    /// Request flashing text or graphics.
     pub flash: bool,
+    /// Request text or graphics hidden until revealed.
     pub conceal: bool,
+    /// Interpret the display code in G1 mosaic mode, including alpha capitals.
     pub mosaic: bool,
+    /// Request gaps between mosaic blocks.
     pub separated: bool,
+    /// Request the upper half of a double-height character or blank.
     pub double_height: bool,
 }
 
@@ -30,14 +40,20 @@ impl Default for VisualCell {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A display compromise or invalid glyph encountered while compiling a row.
 pub struct CompileWarning {
+    /// Zero-based source column affected by the warning.
     pub column: usize,
+    /// Human-readable explanation; wording is not a stable machine interface.
     pub message: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// A transmitted 40-byte row and its compilation diagnostics.
 pub struct CompiledRow {
+    /// Seven-bit display codes and spacing controls, padded with spaces.
     pub bytes: [u8; COLS],
+    /// Reported glyph substitutions, consumed text cells, and changed blank backgrounds.
     pub warnings: Vec<CompileWarning>,
 }
 
@@ -70,6 +86,23 @@ impl Default for State {
 /// transitions consume cells; a preceding blank is used where possible,
 /// otherwise the transition cell is sacrificed and reported. Changes to the
 /// background of a reused blank are also reported.
+///
+/// Only the first 40 input cells are used; shorter inputs are space-padded.
+/// Control codes supplied as glyphs become spaces with warnings. Blank cells
+/// constrain only background and double height; their remaining attributes
+/// may be used to prepare later text. The compiler is greedy and does not
+/// use hold mosaics or guarantee the smallest possible number of controls.
+///
+/// ```
+/// use ttx42::{VisualCell, compile_visual_row};
+/// let row = [
+///     VisualCell::default(),
+///     VisualCell { ch: b'R', fg: 1, ..VisualCell::default() },
+/// ];
+/// let compiled = compile_visual_row(&row);
+/// assert_eq!(&compiled.bytes[..2], &[0x01, b'R']);
+/// assert!(compiled.warnings.is_empty());
+/// ```
 pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
     let mut bytes = [b' '; COLS];
     let mut warnings = Vec::new();

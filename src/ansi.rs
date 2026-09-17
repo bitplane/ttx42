@@ -3,15 +3,23 @@ use std::fmt::Write;
 use crate::{CellSize, Grid};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Glyphs and attributes for one source cell, without ANSI escapes.
 pub struct PresentationCell {
+    /// Printable glyphs for the selected width and mosaic style.
     pub glyphs: String,
+    /// Intended terminal-column width: one in narrow mode, two in wide mode.
     pub width: u8,
+    /// Foreground colour index, 0–7.
     pub fg: u8,
+    /// Background colour index, 0–7.
     pub bg: u8,
+    /// Flash attribute for consumers that provide animation.
     pub flash: bool,
+    /// Conceal attribute; reveal is controlled when creating the decoded grid.
     pub conceal: bool,
 }
 
+/// Presentation cells arranged as 25 rows of 40 source cells.
 pub type PresentationGrid = Vec<Vec<PresentationCell>>;
 
 /// Render semantic teletext cells without terminal escape sequences. In wide
@@ -35,15 +43,21 @@ pub fn present(grid: &Grid, options: &AnsiOptions) -> PresentationGrid {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// Glyph family used for separated mosaic graphics.
 pub enum SeparatedStyle {
+    /// Braille dots, with the bottom dot row repeated for aspect ratio (default).
     #[default]
     Braille,
+    /// Contiguous sextants, discarding separation gaps.
     Contiguous,
+    /// Separated sextants from Unicode 16; requires a supporting font.
     Unicode16,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Shared options for [`present`] and [`to_ansi`]. Defaults to wide braille.
 pub struct AnsiOptions {
+    /// Glyph family for separated mosaics; contiguous mosaics are unaffected.
     pub separated: SeparatedStyle,
     /// Render every teletext cell as exactly two terminal columns.
     pub wide: bool,
@@ -58,6 +72,9 @@ impl Default for AnsiOptions {
     }
 }
 
+/// Render 25 newline-terminated rows using basic ANSI foreground/background
+/// colours, resetting attributes at the end of each row. Flash is not emitted
+/// as ANSI blink; conceal has already been applied by [`crate::decode`].
 pub fn to_ansi(grid: &Grid, options: &AnsiOptions) -> String {
     let mut output = String::new();
     for row in grid.rows() {
