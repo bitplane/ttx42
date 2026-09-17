@@ -97,7 +97,9 @@ impl Page {
     /// # Errors
     /// Returns [`Error::InvalidTti`] for malformed PN or OL records, or
     /// [`Error::NoPages`] if no page is found. Malformed SC values become an
-    /// unspecified subpage; malformed FL destinations become zero.
+    /// unspecified subpage. FL records with fewer than six fields are ignored,
+    /// retaining any earlier links. In records with at least six fields,
+    /// malformed destinations become zero.
     pub fn parse_tti_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
         parse_tti(bytes)
     }
