@@ -89,6 +89,10 @@ impl Default for State {
 /// background of a reused blank are also reported.
 ///
 /// Only the first 40 input cells are used; shorter inputs are space-padded.
+/// Padding inherits the final transmitted attributes, including background
+/// and double height. Supply explicit blank cells when the remaining columns
+/// need a different background or height.
+///
 /// Control codes supplied as glyphs become spaces with warnings. Blank cells
 /// constrain only background and double height. The compiler ignores the
 /// supplied remaining attributes and may set them to prepare later text.
