@@ -1456,3 +1456,23 @@ fn tti_ignores_comma_less_comments_without_inventing_records() {
     assert!(output.contains("XX,Kept\r\n"));
     assert!(output.contains("OL,1,HELLO\r\n"));
 }
+
+#[test]
+fn trailing_double_height_control_needs_a_following_cell_to_suppress_a_row() {
+    for column in [38, 39] {
+        let mut raw = [b' '; 1000];
+        raw[column] = 0x0d;
+        raw[40] = b'X';
+        let grid = decode(&Page::from_raw(&raw).unwrap(), &DecodeOptions::default());
+        // Double height is set-after. In column 39 it enlarges no cell;
+        // in column 38 it enlarges the final blank and suppresses row 1.
+        if column == 39 {
+            assert_eq!(grid.cell(0, 39).unwrap().size, CellSize::Normal);
+            assert_eq!(grid.cell(1, 0).unwrap().ch, 'X');
+        } else {
+            assert_eq!(grid.cell(0, 39).unwrap().size, CellSize::DoubleTop);
+            assert_eq!(grid.cell(1, 0).unwrap().ch, ' ');
+            assert_eq!(grid.cell(1, 39).unwrap().size, CellSize::DoubleBottom);
+        }
+    }
+}
