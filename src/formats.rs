@@ -95,6 +95,9 @@ impl Page {
     /// Supports LF/CRLF lines and ESC escapes. Non-display metadata is decoded
     /// as UTF-8 with replacement for invalid sequences. Repeated display rows
     /// replace earlier rows; unsupported OL rows are retained as records.
+    /// Lines without a comma are ignored. Display rows are limited to 40
+    /// decoded bytes. A trailing lone ESC is retained as control 0x1b and
+    /// escaped on export.
     /// Leading SC and FL records apply to the first page. An explicit SC
     /// takes precedence over the subpage suffix in that page's PN record.
     ///
@@ -291,7 +294,9 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
         }
         let line = String::from_utf8_lossy(line_bytes);
         let line = line.as_ref();
-        let (key, value) = line.split_once(',').unwrap_or((line, ""));
+        let Some((key, value)) = line.split_once(',') else {
+            continue;
+        };
         match key {
             "PN" => {
                 if let Some(page) = current.take() {

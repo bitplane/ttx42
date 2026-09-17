@@ -1446,3 +1446,13 @@ fn visual_compiler_round_trips_broadcast_bands_and_more_footer() {
         }
     }
 }
+
+#[test]
+fn tti_ignores_comma_less_comments_without_inventing_records() {
+    let service = Service::parse_tti("A comment\nPN,10001\nJunk\nXX,Kept\nOL,1,HELLO\n").unwrap();
+    let output = service.to_tti();
+    assert!(!output.contains("comment"));
+    assert!(!output.contains("Junk"));
+    assert!(output.contains("XX,Kept\r\n"));
+    assert!(output.contains("OL,1,HELLO\r\n"));
+}
