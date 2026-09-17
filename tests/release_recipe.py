@@ -28,8 +28,20 @@ if command.startswith('cargo check'):
 """
 
 
+def release_body(justfile):
+    """Extract only the indented body of the release recipe."""
+    lines = justfile.splitlines(keepends=True)
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == "release:")
+    body = []
+    for line in lines[start + 1:]:
+        if line.strip() and not line.startswith((" ", "\t")):
+            break
+        body.append(line)
+    return textwrap.dedent("".join(body))
+
+
 class ReleaseRecipe(unittest.TestCase):
-    def exercise(self, failure=""):
+    def exercise(self, failure="", suffix=""):
         with tempfile.TemporaryDirectory(prefix="ttx42-release-") as directory:
             root = Path(directory)
             originals = {}
@@ -40,7 +52,7 @@ class ReleaseRecipe(unittest.TestCase):
                 executable = root / tool
                 executable.write_text(MOCK)
                 executable.chmod(0o755)
-            recipe = textwrap.dedent((ROOT / "justfile").read_text().split("release:\n", 1)[1])
+            recipe = release_body((ROOT / "justfile").read_text() + suffix)
             result = subprocess.run(
                 ["bash", "-c", recipe], cwd=root, capture_output=True, text=True,
                 env={**os.environ, "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
@@ -91,6 +103,9 @@ class ReleaseRecipe(unittest.TestCase):
 
     def test_success_validates_before_committing_and_tagging(self):
         self.exercise()
+
+    def test_following_recipe_is_not_executed(self):
+        self.exercise(suffix="\nother:\n    exit 99\n")
 
 
 if __name__ == "__main__":
