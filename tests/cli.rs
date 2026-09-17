@@ -119,3 +119,34 @@ fn tti_detection_accepts_leading_metadata_and_row_only_pages() {
     assert!(detected.status.success());
     assert_eq!(detected.stdout, explicit.stdout);
 }
+
+#[test]
+fn sniffing_recovers_truncated_captures_and_ignores_embedded_tti_records() {
+    let mut header = vec![0x02, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15];
+    header.extend([b' '; 32]);
+    for tail in 1..42 {
+        let mut input = header.clone();
+        input.extend(vec![0xff; tail]);
+        let detected = run(&[], &input);
+        let explicit = run(&["--format", "t42"], &input);
+        assert!(detected.status.success(), "tail {tail}");
+        assert_eq!(detected.stdout, explicit.stdout);
+    }
+    let mut input = header;
+    input.extend([0xff; 42]);
+    input.extend(b"\nPN,20000\nOL,1,FALSE POSITIVE\n");
+    let detected = run(&[], &input);
+    let explicit = run(&["--format", "t42"], &input);
+    assert!(detected.status.success());
+    assert_eq!(detected.stdout, explicit.stdout);
+
+    let tti = b"DE,Description\r\nXX,Retained record\r\nPN,10000\r\nOL,1,HELLO\r\n";
+    assert_eq!(run(&[], tti).stdout, run(&["--format", "tti"], tti).stdout);
+    for length in [960, 1000] {
+        let raw = vec![b' '; length];
+        assert_eq!(
+            run(&[], &raw).stdout,
+            run(&["--format", "raw"], &raw).stdout
+        );
+    }
+}

@@ -128,15 +128,24 @@ fn parse_hex(value: &str) -> Result<u16, Box<dyn std::error::Error>> {
 }
 
 fn sniff(bytes: &[u8]) -> Format {
-    if bytes
+    // Recognize a bounded prefix of TTI records, not PN-like bytes anywhere
+    // in a binary capture. Unknown two-letter leading records are allowed.
+    let prefix = &bytes[..bytes.len().min(4096)];
+    let tti = prefix
         .split(|&byte| byte == b'\n')
-        .any(|line| line.starts_with(b"PN,") || line.starts_with(b"OL,"))
-    {
+        .filter(|line| !line.is_empty() && *line != b"\r")
+        .take_while(|line| {
+            line.len() >= 3 && line[..2].iter().all(u8::is_ascii_uppercase) && line[2] == b','
+        })
+        .any(|line| line.starts_with(b"PN,") || line.starts_with(b"OL,"));
+    if tti {
         Format::Tti
-    } else if bytes.len().is_multiple_of(42) && !bytes.is_empty() {
-        Format::T42
-    } else {
+    } else if matches!(bytes.len(), 960 | 1000) || bytes.len() < 42 {
         Format::Raw
+    } else {
+        // T42 recovery accepts a trailing partial packet. Requiring an exact
+        // multiple here would prevent that recovery before the parser runs.
+        Format::T42
     }
 }
 
