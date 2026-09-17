@@ -23,7 +23,8 @@ pub struct PresentationCell {
 pub type PresentationGrid = Vec<Vec<PresentationCell>>;
 
 /// Render semantic teletext cells without terminal escape sequences. In wide
-/// mode every source cell contributes exactly two terminal cells.
+/// mode every source cell contributes two terminal cells, assuming the
+/// terminal displays ambiguous-width Unicode characters in a single column.
 pub fn present(grid: &Grid, options: &AnsiOptions) -> PresentationGrid {
     grid.rows()
         .iter()
