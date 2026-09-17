@@ -1288,3 +1288,35 @@ fn t42_rejects_damaged_identities_without_misattributing_rows() {
         }
     }
 }
+
+#[test]
+fn visual_compiler_preserves_rainbow_backgrounds_and_footer_spacing() {
+    for backgrounds in [vec![0, 0, 1, 1, 2, 2, 4, 4], vec![0, 1, 1, 1, 1, 1, 1]] {
+        let mut row: Vec<_> = backgrounds
+            .iter()
+            .map(|&bg| VisualCell {
+                bg,
+                ..VisualCell::default()
+            })
+            .collect();
+        if row.len() == 7 {
+            for (cell, ch) in row[3..].iter_mut().zip(b"More") {
+                cell.ch = *ch;
+            }
+        }
+        let compiled = compile_visual_row(&row);
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        let grid = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        for (column, target) in row.iter().enumerate() {
+            let actual = grid.cell(0, column).unwrap();
+            assert_eq!(actual.bg, target.bg, "column {column}");
+            assert_eq!(actual.ch, char::from(target.ch), "column {column}");
+            if target.ch != b' ' {
+                assert_eq!(actual.fg, target.fg);
+            }
+        }
+    }
+}

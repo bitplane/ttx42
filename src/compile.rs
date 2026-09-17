@@ -131,24 +131,35 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
         .collect();
     let mut state = State::default();
     for column in 0..COLS.min(cells.len()) {
-        let mut target = cells[column];
-        if target.ch == b' ' {
-            // A space only exposes background and height. Use its other
-            // attributes to prepare the next glyph, not to restore defaults
-            // supplied by an editor for an untouched gap.
-            let next = cells[column + 1..]
+        let target = cells[column];
+        // None means the foreground, mode and effects are unconstrained.
+        // In particular, latching a background must not restore an old colour
+        // just to draw a blank. A later glyph can supply preparation hints.
+        let appearance = if target.ch == b' ' {
+            cells[column + 1..]
                 .iter()
                 .find(|cell| cell.ch != b' ')
-                // A different background may need an intermediate colour;
-                // leave those blanks available for the full transition.
-                .filter(|cell| cell.bg.min(7) == target.bg.min(7));
-            target.fg = next.map_or(state.fg, |cell| cell.fg);
-            target.mosaic = next.map_or(state.mosaic, |cell| cell.mosaic);
-            target.separated = next.map_or(state.separated, |cell| cell.separated);
-            target.flash = next.map_or(state.flash, |cell| cell.flash);
-            target.conceal = next.map_or(state.conceal, |cell| cell.conceal);
+                .filter(|cell| cell.bg.min(7) == target.bg.min(7))
+                .copied()
+                .map(state_for)
+        } else {
+            Some(state_for(target))
+        };
+        let mut controls = transition_controls(state, target, appearance);
+        if target.ch == b' '
+            && cells.get(column + 1).is_some_and(|cell| cell.ch == b' ')
+            && let Some(index) = controls
+                .iter()
+                .position(|&code| matches!(code, 0x1c | 0x1d))
+            && !controls[index + 1..]
+                .iter()
+                .any(|&code| matches!(code, 0x0c | 0x0d))
+        {
+            // Finish the observable background here. Colour restores and
+            // effects can use the following blanks instead of pulling this
+            // set-at control into an earlier cell.
+            controls.truncate(index + 1);
         }
-        let mut controls = transition_controls(state, target);
         if controls.is_empty() {
             bytes[column] = target.ch & 0x7f;
             continue;
@@ -260,21 +271,27 @@ fn state_for(cell: VisualCell) -> State {
     }
 }
 
-fn transition_controls(mut state: State, target: VisualCell) -> Vec<u8> {
-    let target = state_for(target);
+fn transition_controls(mut state: State, cell: VisualCell, appearance: Option<State>) -> Vec<u8> {
+    let bg = cell.bg.min(7);
     let mut out = Vec::new();
     // Background is latched independently of subsequent foreground changes.
     // Establish it first so partial transitions also make forward progress.
-    if state.bg != target.bg {
-        if target.bg != 0 && state.fg != target.bg {
-            let colour = if target.mosaic { 0x10 } else { 0 } + target.bg;
+    if state.bg != bg {
+        if bg != 0 && state.fg != bg {
+            let mosaic = appearance.map_or(state.mosaic, |target| target.mosaic);
+            let colour = if mosaic { 0x10 } else { 0 } + bg;
             out.push(colour);
             apply_control(&mut state, colour);
         }
-        let background = if target.bg == 0 { 0x1c } else { 0x1d };
+        let background = if bg == 0 { 0x1c } else { 0x1d };
         out.push(background);
         apply_control(&mut state, background);
     }
+    let target = State {
+        bg,
+        double_height: cell.double_height,
+        ..appearance.unwrap_or(state)
+    };
     if state.mosaic != target.mosaic || state.fg != target.fg || (state.conceal && !target.conceal)
     {
         out.push(if target.mosaic {
