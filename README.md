@@ -87,6 +87,14 @@ its `ttxcat` CLI by Vilcans are prior art. For browser-based authoring see
 This release targets UK Level 1 pages. Level 1.5/2.5/3.5 enhancements and
 additional national subsets are intentionally out of scope.
 
+## Releasing
+
+Maintainers need `just`, Rust with clippy and rustfmt, Python 3, Bash and Git.
+From a clean working tree, `just release` runs the checks, bumps the patch
+version, commits and tags it, then pushes the branch and tag. The tag triggers
+the release workflow, which validates and publishes to crates.io using the
+configured release credentials.
+
 ## License
 
 WTFPL with an additional clause; see [LICENSE](LICENSE). Font attribution and
