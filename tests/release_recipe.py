@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -18,6 +19,10 @@ with open('calls.jsonl', 'a') as log:
     log.write(json.dumps([command, version]) + '\\n')
 if os.environ.get('FAIL_COMMAND') and command.startswith(os.environ['FAIL_COMMAND']):
     sys.exit(1)
+if command.startswith('cargo '):
+    expected = re.search(r'^channel = "(.*?)"', pathlib.Path('rust-toolchain.toml').read_text(), re.M)[1]
+    if os.environ.get('RUSTUP_TOOLCHAIN') != expected:
+        sys.exit('release must use the repository toolchain pin')
 if command.startswith('cargo doc') and os.environ.get('RUSTDOCFLAGS') != '-D warnings':
     sys.exit('documentation warnings must fail the release')
 if command.startswith('git rev-parse'):
@@ -45,10 +50,18 @@ class ReleaseRecipe(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="ttx42-release-") as directory:
             root = Path(directory)
             originals = {}
-            for name in ["Cargo.toml", "Cargo.lock"]:
+            for name in ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]:
                 originals[name] = (ROOT / name).read_text()
                 (root / name).write_text(originals[name])
-            for tool in ["cargo", "git"]:
+            (root / "scripts").mkdir()
+            shutil.copyfile(ROOT / "scripts/check.sh", root / "scripts/check.sh")
+            (root / "tests").mkdir()
+            # The nested release-test invocation is a subprocess boundary,
+            # not another execution of this test suite inside its own mocks.
+            (root / "tests/release_recipe.py").write_text(
+                "import os, sys\nsys.exit(os.environ.get('FAIL_COMMAND') == 'release tests')\n"
+            )
+            for tool in ["cargo", "git", "rustup"]:
                 executable = root / tool
                 executable.write_text(MOCK)
                 executable.chmod(0o755)
@@ -56,7 +69,7 @@ class ReleaseRecipe(unittest.TestCase):
             result = subprocess.run(
                 ["bash", "-c", recipe], cwd=root, capture_output=True, text=True,
                 env={**os.environ, "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
-                     "FAIL_COMMAND": failure},
+                     "FAIL_COMMAND": failure, "RUSTUP_TOOLCHAIN": "wrong-toolchain"},
             )
             calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
             if failure:
@@ -64,7 +77,7 @@ class ReleaseRecipe(unittest.TestCase):
                 for name, original in originals.items():
                     self.assertEqual((root / name).read_text(), original)
                 self.assertFalse(any(command.startswith(("git tag", "git push")) for command, _ in calls))
-                if failure.startswith(("cargo test", "cargo doc")):
+                if failure not in ("cargo publish", "git commit"):
                     self.assertFalse(any(command.startswith(("cargo publish", "git commit")) for command, _ in calls))
             else:
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -74,14 +87,17 @@ class ReleaseRecipe(unittest.TestCase):
                 tag = next(i for i, command in enumerate(commands) if command.startswith("git tag"))
                 self.assertLess(validation, commit)
                 self.assertLess(commit, tag)
-                for check in ["cargo test --locked --doc", "cargo doc --locked --no-deps"]:
+                for check in ["cargo clippy --locked --all-targets -- -D warnings",
+                              "cargo test --locked --doc", "cargo doc --locked --no-deps",
+                              "cargo +1.88.0 test --locked --all-targets",
+                              "cargo +1.88.0 test --locked --doc"]:
                     self.assertIn(check, commands)
                     self.assertLess(commands.index(check), validation)
                 old_version = re.search(r'^version = "(.*?)"', originals["Cargo.toml"], re.M)[1]
                 major, minor, patch = map(int, old_version.split("."))
                 new_version = f"{major}.{minor}.{patch + 1}"
                 for command, version in calls:
-                    if command.startswith(("cargo fmt", "cargo clippy", "cargo test", "cargo doc")):
+                    if command.startswith(("cargo fmt", "cargo clippy", "cargo test", "cargo doc", "cargo +")):
                         self.assertEqual(version, old_version)
                     if command.startswith("cargo publish"):
                         self.assertEqual(version, new_version)
@@ -94,6 +110,15 @@ class ReleaseRecipe(unittest.TestCase):
 
     def test_documentation_failure_stops_before_version_bump(self):
         self.exercise("cargo doc")
+
+    def test_clippy_failure_stops_before_version_bump(self):
+        self.exercise("cargo clippy")
+
+    def test_msrv_failure_stops_before_version_bump(self):
+        self.exercise("cargo +1.88.0 test")
+
+    def test_release_tests_failure_stops_before_version_bump(self):
+        self.exercise("release tests")
 
     def test_package_failure_restores_versions(self):
         self.exercise("cargo publish")

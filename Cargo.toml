@@ -22,6 +22,9 @@ include = [
     "/THIRD_PARTY_LICENSES.md",
 ]
 
+[lints.rust]
+warnings = "deny"
+
 [dependencies]
 
 [[example]]

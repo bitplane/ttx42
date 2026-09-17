@@ -87,9 +87,22 @@ its `ttxcat` CLI by Vilcans are prior art. For browser-based authoring see
 This release targets UK Level 1 pages. Level 1.5/2.5/3.5 enhancements and
 additional national subsets are intentionally out of scope.
 
+## Development checks
+
+The repository pins Rust 1.98.0, clippy and rustfmt in `rust-toolchain.toml`.
+With rustup, ordinary `cargo` commands use that version here. Warnings are
+errors, including with plain `cargo clippy`.
+
+Run `just check` for the complete CI suite: formatting, Clippy across all
+targets, tests, doctests, documentation, Rust 1.88 compatibility and release
+recipe tests. It requires Python 3.11 or newer. CI and `just release` use the
+same `scripts/check.sh`; it selects the pinned toolchain explicitly and installs
+missing toolchains through rustup. Update the pin deliberately to adopt a
+new Rust release and its lint changes.
+
 ## Releasing
 
-Maintainers need `just`, Rust with clippy and rustfmt, Python 3, Bash and Git.
+Maintainers need `just`, rustup, Python 3.11 or newer, Bash and Git.
 From a clean working tree, `just release` runs the checks, bumps the patch
 version, commits and tags it, then pushes the branch and tag. The tag triggers
 the release workflow, which validates and publishes to crates.io using the

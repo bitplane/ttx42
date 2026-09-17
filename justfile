@@ -19,12 +19,7 @@ release:
         echo "error: tag $tag already exists" >&2
         exit 1
     fi
-    cargo check --locked
-    cargo fmt --check
-    cargo clippy --locked --all-targets -- -D warnings
-    cargo test --locked --all-targets
-    cargo test --locked --doc
-    RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
+    source scripts/check.sh
     # Keep failed package validation or commits from leaving a version bump.
     backup=$(mktemp -d)
     cp Cargo.toml Cargo.lock "$backup/"
@@ -51,3 +46,7 @@ release:
     git push origin HEAD
     git push origin "$tag"
     echo "released $tag"
+
+# Run the same pinned-toolchain and MSRV checks as CI.
+check:
+    bash scripts/check.sh
