@@ -34,6 +34,8 @@ For T42 input containing multiple transmissions, running without `--page` or
 `--subpage` lists the recovered page and subpage numbers in hexadecimal,
 including repeated transmissions. Either selector switches to rendering;
 selectors may be combined and their values are hexadecimal.
+Raw buffers have no page number, so `--page` cannot match them. Omit that
+selector when rendering a raw file.
 
 When multiple pages or transmissions match, the CLI renders the one with the
 most visible non-space decoded cells; ties select the last match in input

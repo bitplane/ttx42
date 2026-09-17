@@ -144,6 +144,7 @@ fn usage() {
     println!(
         "ttx42 [FILE|-] [--format raw|tti|t42] [--page HEX] [--subpage HEX] [--reveal] [--wide|--narrow] [--separated braille|contiguous|unicode16]\n\
          Reads stdin when FILE is omitted or '-'.\n\
+         Raw input has no page number; omit --page for raw files.\n\
          Multi-transmission T42 input lists page/subpage numbers unless either selector is given.\n\
          When multiple entries match, renders the one with most visible non-space cells;\n\
          ties select the last match in input order. Transmissions are not merged."
