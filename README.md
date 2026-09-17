@@ -89,4 +89,5 @@ additional national subsets are intentionally out of scope.
 
 ## License
 
-WTFPL.
+WTFPL with an additional clause; see [LICENSE](LICENSE). Font attribution and
+license terms are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
