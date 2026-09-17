@@ -37,9 +37,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "--format" => {
                 format = Some(parse_format(&args.next().ok_or("--format needs a value")?)?)
             }
-            "--page" => page_number = Some(parse_hex(&args.next().ok_or("--page needs a value")?)?),
+            "--page" => {
+                page_number = Some(parse_hex(
+                    "--page",
+                    &args.next().ok_or("--page needs a value")?,
+                )?)
+            }
             "--subpage" => {
-                subpage = Some(parse_hex(&args.next().ok_or("--subpage needs a value")?)?)
+                subpage = Some(parse_hex(
+                    "--subpage",
+                    &args.next().ok_or("--subpage needs a value")?,
+                )?)
             }
             "--reveal" => reveal = true,
             "--wide" => wide = true,
@@ -127,8 +135,9 @@ fn parse_format(value: &str) -> Result<Format, Box<dyn std::error::Error>> {
     }
 }
 
-fn parse_hex(value: &str) -> Result<u16, Box<dyn std::error::Error>> {
-    Ok(u16::from_str_radix(value.trim_start_matches("0x"), 16)?)
+fn parse_hex(flag: &str, value: &str) -> Result<u16, Box<dyn std::error::Error>> {
+    u16::from_str_radix(value.trim_start_matches("0x"), 16)
+        .map_err(|error| format!("{flag}: invalid hexadecimal value {value:?}: {error}").into())
 }
 
 fn sniff(bytes: &[u8]) -> Format {

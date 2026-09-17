@@ -162,3 +162,15 @@ fn version_reports_the_package_version_without_reading_input() {
         );
     }
 }
+
+#[test]
+fn hexadecimal_errors_identify_the_selector_and_value() {
+    for flag in ["--page", "--subpage"] {
+        for value in ["nope", "10000"] {
+            let result = run(&[flag, value], b"");
+            assert!(!result.status.success());
+            let error = String::from_utf8_lossy(&result.stderr);
+            assert!(error.contains(flag) && error.contains(value), "{error}");
+        }
+    }
+}
