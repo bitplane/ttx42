@@ -1349,3 +1349,19 @@ fn visual_compiler_reports_every_blank_height_mismatch() {
         }
     }
 }
+
+#[test]
+fn tti_dos_eof_marker_is_not_exported_as_a_record() {
+    for ending in ["\x1a", "\x1a\r\n", "\x1a\r\nPN,20000\r\nOL,1,IGNORED\r\n"] {
+        let input = format!("PN,10000\r\nOL,1,HELLO\r\n{ending}");
+        let service = Service::parse_tti(&input).unwrap();
+        let output = service.to_tti();
+        assert!(!output.contains('\x1a'));
+        assert!(!output.contains("IGNORED"));
+        assert!(output.contains("OL,1,HELLO\r\n"));
+        assert_eq!(Service::parse_tti(&output).unwrap().to_tti(), output);
+    }
+    // A raw control inside an OL payload is still teletext data.
+    let service = Service::parse_tti("PN,10000\nOL,1,A\x1aB\n").unwrap();
+    assert!(service.to_tti().contains("OL,1,A\x1bZB"));
+}

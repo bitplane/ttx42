@@ -284,6 +284,11 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
     let mut leading_links = None;
     for line_bytes in bytes.split(|&byte| byte == b'\n') {
         let line_bytes = line_bytes.strip_suffix(b"\r").unwrap_or(line_bytes);
+        // DOS text files may end with a standalone Ctrl-Z marker. It is not
+        // a record and must never be relocated ahead of the output rows.
+        if line_bytes.starts_with(b"\x1a") {
+            break;
+        }
         let line = String::from_utf8_lossy(line_bytes);
         let line = line.as_ref();
         let (key, value) = line.split_once(',').unwrap_or((line, ""));
