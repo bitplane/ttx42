@@ -142,7 +142,16 @@ pub(crate) fn separated_char(ch: char, style: SeparatedStyle) -> char {
 }
 
 fn char_mask(ch: char) -> Option<u8> {
-    (0..64).find(|&mask| crate::decode::sextant(mask) == ch)
+    match ch {
+        ' ' => Some(0),
+        '▌' => Some(21),
+        '▐' => Some(42),
+        '█' => Some(63),
+        '\u{1fb00}'..='\u{1fb13}' => Some((ch as u32 - 0x1fb00 + 1) as u8),
+        '\u{1fb14}'..='\u{1fb27}' => Some((ch as u32 - 0x1fb00 + 2) as u8),
+        '\u{1fb28}'..='\u{1fb3b}' => Some((ch as u32 - 0x1fb00 + 3) as u8),
+        _ => None,
+    }
 }
 
 fn push_cell(output: &mut String, ch: char, wide: bool) {
@@ -203,4 +212,17 @@ fn unicode16(mask: u8) -> char {
     // sequence U+1CE51..U+1CE8F follows the sextant mask numerically.
     debug_assert!((1..=63).contains(&mask));
     char::from_u32(0x1ce50 + mask as u32).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sextant_lookup_inverts_all_masks_and_rejects_text() {
+        for mask in 0..64 {
+            assert_eq!(super::char_mask(crate::decode::sextant(mask)), Some(mask));
+        }
+        for ch in ['A', '£', '■', '—', '\u{1faff}', '\u{1fb3c}'] {
+            assert_eq!(super::char_mask(ch), None);
+        }
+    }
 }
