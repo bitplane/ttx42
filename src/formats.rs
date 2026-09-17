@@ -95,6 +95,8 @@ impl Page {
     /// Supports LF/CRLF lines and ESC escapes. Non-display metadata is decoded
     /// as UTF-8 with replacement for invalid sequences. Repeated display rows
     /// replace earlier rows; unsupported OL rows are retained as records.
+    /// Leading SC and FL records apply to the first page. An explicit SC
+    /// takes precedence over the subpage suffix in that page's PN record.
     ///
     /// # Errors
     /// Returns [`Error::InvalidTti`] for malformed PN or OL records, or
@@ -278,6 +280,8 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
     let mut pages = Vec::new();
     let mut current: Option<Page> = None;
     let mut leading_records = Vec::new();
+    let mut leading_subpage = None;
+    let mut leading_links = None;
     for line_bytes in bytes.split(|&byte| byte == b'\n') {
         let line_bytes = line_bytes.strip_suffix(b"\r").unwrap_or(line_bytes);
         let line = String::from_utf8_lossy(line_bytes);
@@ -303,32 +307,40 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                     .get(3..)
                     .filter(|value| !value.is_empty())
                     .and_then(|value| u16::from_str_radix(value, 16).ok());
+                page.subpage = leading_subpage.take().unwrap_or(page.subpage);
+                page.fasttext = leading_links.take();
                 current = Some(page);
             }
             "SC" => {
+                let subpage = u16::from_str_radix(value.trim(), 16).ok();
                 if let Some(page) = current.as_mut() {
-                    page.subpage = u16::from_str_radix(value.trim(), 16).ok();
+                    page.subpage = subpage;
+                } else {
+                    leading_subpage = Some(subpage);
                 }
             }
             "FL" => {
-                if let Some(page) = current.as_mut() {
-                    let values: Vec<_> = value.split(',').map(str::trim).collect();
-                    if values.len() >= 6 {
-                        let parse = |value: &str| {
-                            u16::from_str_radix(
-                                value.trim_start_matches(|c: char| !c.is_ascii_hexdigit()),
-                                16,
-                            )
-                            .unwrap_or(0)
-                        };
-                        page.fasttext = Some(FastTextLinks {
-                            red: parse(values[0]),
-                            green: parse(values[1]),
-                            yellow: parse(values[2]),
-                            cyan: parse(values[3]),
-                            extra: parse(values[4]),
-                            index: parse(values[5]),
-                        });
+                let values: Vec<_> = value.split(',').map(str::trim).collect();
+                if values.len() >= 6 {
+                    let parse = |value: &str| {
+                        u16::from_str_radix(
+                            value.trim_start_matches(|c: char| !c.is_ascii_hexdigit()),
+                            16,
+                        )
+                        .unwrap_or(0)
+                    };
+                    let links = FastTextLinks {
+                        red: parse(values[0]),
+                        green: parse(values[1]),
+                        yellow: parse(values[2]),
+                        cyan: parse(values[3]),
+                        extra: parse(values[4]),
+                        index: parse(values[5]),
+                    };
+                    if let Some(page) = current.as_mut() {
+                        page.fasttext = Some(links);
+                    } else {
+                        leading_links = Some(links);
                     }
                 }
             }
@@ -340,6 +352,8 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                     .parse()
                     .map_err(|_| Error::InvalidTti(format!("bad OL row: {row}")))?;
                 let page = current.get_or_insert_with(|| Page {
+                    subpage: leading_subpage.take().flatten(),
+                    fasttext: leading_links.take(),
                     records: std::mem::take(&mut leading_records),
                     ..Page::default()
                 });

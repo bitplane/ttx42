@@ -610,6 +610,38 @@ fn tti_byte_parser_preserves_all_legacy_controls_and_utf8_metadata() {
 }
 
 #[test]
+fn tti_leading_subcode_and_links_apply_only_to_the_first_page() {
+    for start in ["PN,10002\nOL,1,FIRST", "OL,1,FIRST"] {
+        let input = format!(
+            "SC,0001\nFL,101,102,103,104,105,100\nFL,999\n{start}\nPN,20000\nOL,1,SECOND\n"
+        );
+        let service = Service::parse_tti(&input).unwrap();
+        assert_eq!(service.pages().len(), 2);
+        let first = &service.pages()[0];
+        assert_eq!(first.subpage_number(), Some(1));
+        assert_eq!(first.fasttext().unwrap().red, 0x101);
+        assert_eq!(first.fasttext().unwrap().index, 0x100);
+        assert_eq!(service.pages()[1].subpage_number(), Some(0));
+        assert_eq!(service.pages()[1].fasttext(), None);
+        let saved = service.to_tti();
+        let restored = Service::parse_tti(&saved).unwrap();
+        assert_eq!(restored.pages()[0].subpage_number(), Some(1));
+        assert_eq!(restored.pages()[0].fasttext(), first.fasttext());
+        assert_eq!(restored.to_tti(), saved);
+    }
+    let service = Service::parse_tti(
+        "SC,0001\nFL,101,102,103,104,105,100\nPN,100\nSC,0003\nFL,201,202,203,204,205,200\n",
+    )
+    .unwrap();
+    assert_eq!(service.pages()[0].subpage_number(), Some(3));
+    assert_eq!(service.pages()[0].fasttext().unwrap().red, 0x201);
+    assert_eq!(
+        Service::parse_tti("SC,0001\nFL,101,102,103,104,105,100\n"),
+        Err(crate::Error::NoPages)
+    );
+}
+
+#[test]
 fn tti_preserves_leading_records_on_the_first_page() {
     for first_page in ["PN,1000001\r\nOL,1,HELLO", "OL,1,HELLO"] {
         let input = format!(
