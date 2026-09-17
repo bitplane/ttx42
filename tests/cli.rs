@@ -150,3 +150,15 @@ fn sniffing_recovers_truncated_captures_and_ignores_embedded_tti_records() {
         );
     }
 }
+
+#[test]
+fn version_reports_the_package_version_without_reading_input() {
+    for flag in ["--version", "-V"] {
+        let result = run(&[flag], b"");
+        assert!(result.status.success());
+        assert_eq!(
+            result.stdout,
+            format!("ttx42 {}\n", env!("CARGO_PKG_VERSION")).as_bytes()
+        );
+    }
+}

@@ -52,6 +52,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     _ => return Err("--separated expects braille, contiguous, or unicode16".into()),
                 }
             }
+            "-V" | "--version" => {
+                println!("ttx42 {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "-h" | "--help" => {
                 usage();
                 return Ok(());
@@ -151,7 +155,7 @@ fn sniff(bytes: &[u8]) -> Format {
 
 fn usage() {
     println!(
-        "ttx42 [FILE|-] [--format raw|tti|t42] [--page HEX] [--subpage HEX] [--reveal] [--wide|--narrow] [--separated braille|contiguous|unicode16]\n\
+        "ttx42 [--version] [FILE|-] [--format raw|tti|t42] [--page HEX] [--subpage HEX] [--reveal] [--wide|--narrow] [--separated braille|contiguous|unicode16]\n\
          Reads stdin when FILE is omitted or '-'.\n\
          Raw input has no page number; omit --page for raw files.\n\
          Multi-transmission T42 input lists page/subpage numbers unless either selector is given.\n\
