@@ -1398,3 +1398,51 @@ fn visual_compiler_ignores_separation_on_alpha_text() {
     assert_eq!(grid.cell(0, 4).unwrap().ch, 'A');
     assert!(!grid.cell(0, 7).unwrap().separated);
 }
+
+#[test]
+fn visual_compiler_round_trips_broadcast_bands_and_more_footer() {
+    let mut rainbow = [b' '; 40];
+    rainbow[2..14].copy_from_slice(&[
+        0x11, 0x1d, b' ', 0x12, 0x1d, b' ', 0x15, 0x1d, b' ', 0x14, 0x1d, b' ',
+    ]);
+    let mut footer = [b' '; 40];
+    footer[..2].copy_from_slice(&[0x11, 0x1d]);
+    footer[31..38].copy_from_slice(&[0x03, 0x1d, 0x01, b'M', b'o', b'r', b'e']);
+    for source in [rainbow, footer] {
+        let original = decode(&page_with_row(0, &source), &DecodeOptions::default());
+        let row: Vec<_> = original.rows()[0]
+            .iter()
+            .map(|cell| VisualCell {
+                ch: cell.ch as u8,
+                fg: cell.fg,
+                bg: cell.bg,
+                ..VisualCell::default()
+            })
+            .collect();
+        let compiled = compile_visual_row(&row);
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        // Blank graphics colours can equivalently use alpha colours: the
+        // authoring cells have no visible mosaic glyph to require G1 mode.
+        let canonical = source.map(|byte| {
+            if (0x10..=0x17).contains(&byte) {
+                byte - 0x10
+            } else {
+                byte
+            }
+        });
+        assert_eq!(compiled.bytes, canonical);
+        let actual = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        for (expected, actual) in original.rows()[0].iter().zip(actual.rows()[0].iter()) {
+            assert_eq!(
+                (actual.ch, actual.bg, actual.size),
+                (expected.ch, expected.bg, expected.size)
+            );
+            if expected.ch != ' ' {
+                assert_eq!(actual.fg, expected.fg);
+            }
+        }
+    }
+}
