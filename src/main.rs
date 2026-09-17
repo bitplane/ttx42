@@ -96,7 +96,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|candidate| {
             page_number.is_none_or(|number| candidate.page_number() == Some(number))
-                && subpage.is_none_or(|number| candidate.subpage_number() == Some(number))
+                && subpage.is_none_or(|number| candidate.subpage_number().unwrap_or(0) == number)
         })
         .map(|page| {
             let grid = decode(page, &DecodeOptions { reveal });

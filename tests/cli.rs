@@ -57,6 +57,18 @@ fn undecodable_t42_input_reports_no_pages() {
 }
 
 #[test]
+fn absent_tti_subpage_matches_zero() {
+    let input = b"PN,100\nOL,1,HELLO\n";
+    let selected = run(&["--page", "100", "--subpage", "0"], input);
+    let unfiltered = run(&["--page", "100"], input);
+    assert!(selected.status.success());
+    assert_eq!(selected.stdout, unfiltered.stdout);
+    let missing = run(&["--subpage", "1"], input);
+    assert!(!missing.status.success());
+    assert!(missing.stdout.is_empty());
+}
+
+#[test]
 fn t42_subpage_selection_without_page_number_is_respected() {
     // Two headers for page 100, subpages 1 and 2, encoded with Hamming 8/4.
     let mut input = Vec::new();
