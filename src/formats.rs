@@ -21,7 +21,9 @@ pub struct Page {
 pub struct TtiRecord {
     /// Command name, such as `DE`, `DS`, or `OL`.
     pub key: String,
-    /// Everything after the command's first comma, excluding the line ending.
+    /// Retained value without the line ending. Metadata values follow the
+    /// command's first comma. OL values contain the row number, a comma, and
+    /// the normalized seven-bit payload with controls ESC-escaped.
     pub value: String,
 }
 
