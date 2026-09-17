@@ -1320,3 +1320,32 @@ fn visual_compiler_preserves_rainbow_backgrounds_and_footer_spacing() {
         }
     }
 }
+
+#[test]
+fn visual_compiler_reports_every_blank_height_mismatch() {
+    for pattern in 0u16..256 {
+        let row: Vec<_> = (0..8)
+            .map(|column| VisualCell {
+                double_height: pattern & (1 << column) != 0,
+                ..VisualCell::default()
+            })
+            .collect();
+        let compiled = compile_visual_row(&row);
+        let grid = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        for (column, target) in row.iter().enumerate() {
+            let actual = grid.cell(0, column).unwrap().size == CellSize::DoubleTop;
+            let warned = compiled
+                .warnings
+                .iter()
+                .any(|warning| warning.column == column && warning.message.contains("height"));
+            assert_eq!(
+                warned,
+                actual != target.double_height,
+                "pattern {pattern}, column {column}"
+            );
+        }
+    }
+}

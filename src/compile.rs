@@ -54,7 +54,7 @@ pub struct CompileWarning {
 pub struct CompiledRow {
     /// Seven-bit display codes and spacing controls, padded with spaces.
     pub bytes: [u8; COLS],
-    /// Reported glyph substitutions, consumed text cells, and changed blank backgrounds.
+    /// Reported glyph substitutions, consumed text cells, and changed blank backgrounds or heights.
     pub warnings: Vec<CompileWarning>,
 }
 
@@ -86,7 +86,7 @@ impl Default for State {
 /// Compile a WYSIWYG row to a real Level 1 control-code row. Attribute
 /// transitions consume cells; a preceding blank is used where possible,
 /// otherwise the transition cell is sacrificed and reported. Changes to the
-/// background of a reused blank are also reported.
+/// background or height of a blank are also reported.
 ///
 /// Only the first 40 input cells are used; shorter inputs are space-padded.
 /// Padding inherits the final transmitted attributes, including background
@@ -213,6 +213,23 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
                     message: "attribute transition consumes this display cell".into(),
                 });
             }
+        }
+    }
+    // Validate the final row: later transitions can reuse an earlier blank.
+    // Double height is set-after, whereas normal height is set-at.
+    let mut double_height = false;
+    for (column, target) in cells.iter().enumerate() {
+        if bytes[column] == 0x0c {
+            double_height = false;
+        }
+        if target.ch == b' ' && double_height != target.double_height {
+            warnings.push(CompileWarning {
+                column,
+                message: "attribute transition changes this blank cell's height".into(),
+            });
+        }
+        if bytes[column] == 0x0d {
+            double_height = true;
         }
     }
     CompiledRow { bytes, warnings }
