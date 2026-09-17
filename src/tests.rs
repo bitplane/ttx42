@@ -655,6 +655,49 @@ fn presentation_is_exactly_eighty_columns_and_keeps_flash() {
 }
 
 #[test]
+fn visual_compiler_ignores_invisible_blank_attributes() {
+    for mosaic in [false, true] {
+        let mut row = [VisualCell::default(); 40];
+        for (column, ch) in b"RED BLUE".iter().copied().enumerate() {
+            if ch != b' ' {
+                row[column] = VisualCell {
+                    ch: if mosaic { 0x7f } else { ch },
+                    fg: if column < 3 { 1 } else { 4 },
+                    mosaic,
+                    separated: mosaic,
+                    ..VisualCell::default()
+                };
+            }
+        }
+        let plain = compile_visual_row(&row);
+        row[3] = VisualCell {
+            fg: 3,
+            mosaic: !mosaic,
+            separated: true,
+            flash: true,
+            conceal: true,
+            ..VisualCell::default()
+        };
+        let blank = row[3];
+        row[8..].fill(blank);
+        let styled = compile_visual_row(&row);
+        assert_eq!(plain, styled);
+        let grid = decode(&page_with_row(0, &plain.bytes), &DecodeOptions::default());
+        for column in 4..8 {
+            assert!(
+                !plain
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.column == column)
+            );
+            assert_eq!(grid.cell(0, column).unwrap().fg, 4);
+            assert_ne!(grid.cell(0, column).unwrap().ch, ' ');
+        }
+        assert!(plain.bytes[8..].iter().all(|&byte| byte == b' '));
+    }
+}
+
+#[test]
 fn visual_compiler_replaces_control_glyphs_without_changing_following_state() {
     for code in (0x00..=0x1f).chain(0x80..=0x9f) {
         let row = [

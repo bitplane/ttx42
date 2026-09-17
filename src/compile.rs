@@ -92,7 +92,23 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
         .collect();
     let mut state = State::default();
     for column in 0..COLS.min(cells.len()) {
-        let target = cells[column];
+        let mut target = cells[column];
+        if target.ch == b' ' {
+            // A space only exposes background and height. Use its other
+            // attributes to prepare the next glyph, not to restore defaults
+            // supplied by an editor for an untouched gap.
+            let next = cells[column + 1..]
+                .iter()
+                .find(|cell| cell.ch != b' ')
+                // A different background may need an intermediate colour;
+                // leave those blanks available for the full transition.
+                .filter(|cell| cell.bg.min(7) == target.bg.min(7));
+            target.fg = next.map_or(state.fg, |cell| cell.fg);
+            target.mosaic = next.map_or(state.mosaic, |cell| cell.mosaic);
+            target.separated = next.map_or(state.separated, |cell| cell.separated);
+            target.flash = next.map_or(state.flash, |cell| cell.flash);
+            target.conceal = next.map_or(state.conceal, |cell| cell.conceal);
+        }
         let mut controls = transition_controls(state, target);
         if controls.is_empty() {
             bytes[column] = target.ch & 0x7f;
