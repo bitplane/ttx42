@@ -80,7 +80,7 @@ fn t42_subpage_selection_without_page_number_is_respected() {
     }
     let listing = run(&["--format", "t42"], &input);
     assert!(listing.status.success());
-    assert_eq!(listing.stdout, b"100 0001\n100 0002\n");
+    assert_eq!(listing.stdout, b"100 0001 1\n100 0002 1\n");
 
     let selected = run(&["--format", "t42", "--subpage", "2"], &input);
     let explicit = run(
@@ -173,4 +173,18 @@ fn hexadecimal_errors_identify_the_selector_and_value() {
             assert!(error.contains(flag) && error.contains(value), "{error}");
         }
     }
+}
+
+#[test]
+fn t42_listing_groups_repeated_transmissions() {
+    let mut input = Vec::new();
+    for subpage in [0x49, 0x02, 0x49] {
+        input.extend([
+            0x02, 0x15, 0x15, 0x15, subpage, 0x15, 0x15, 0x15, 0x15, 0x15,
+        ]);
+        input.extend([b' '; 32]);
+    }
+    let result = run(&["--format", "t42"], &input);
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"100 0001 1\n100 0002 2\n");
 }

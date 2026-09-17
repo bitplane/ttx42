@@ -31,8 +31,9 @@ ttx42 page.bin --narrow
 ```
 
 For T42 input containing multiple transmissions, running without `--page` or
-`--subpage` lists the recovered page and subpage numbers in hexadecimal,
-including repeated transmissions. Either selector switches to rendering;
+`--subpage` lists one line per recovered page and subpage, sorted by identity.
+The columns are hexadecimal page, hexadecimal subpage and decimal transmission
+count. Either selector switches to rendering;
 selectors may be combined and their values are hexadecimal.
 Raw buffers have no page number, so `--page` cannot match them. Omit that
 selector when rendering a raw file.

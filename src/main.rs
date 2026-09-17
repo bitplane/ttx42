@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     env, fs,
     io::{self, Read},
     process::ExitCode,
@@ -95,12 +96,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         && page_number.is_none()
         && subpage.is_none()
     {
+        let mut counts = BTreeMap::new();
         for page in &pages {
-            println!(
-                "{:03X} {:04X}",
+            let identity = (
                 page.page_number().unwrap_or(0),
-                page.subpage_number().unwrap_or(0)
+                page.subpage_number().unwrap_or(0),
             );
+            *counts.entry(identity).or_insert(0usize) += 1;
+        }
+        for ((page, subpage), count) in counts {
+            println!("{page:03X} {subpage:04X} {count}");
         }
         return Ok(());
     }
@@ -167,7 +172,7 @@ fn usage() {
         "ttx42 [--version] [FILE|-] [--format raw|tti|t42] [--page HEX] [--subpage HEX] [--reveal] [--wide|--narrow] [--separated braille|contiguous|unicode16]\n\
          Reads stdin when FILE is omitted or '-'.\n\
          Raw input has no page number; omit --page for raw files.\n\
-         Multi-transmission T42 input lists page/subpage numbers unless either selector is given.\n\
+         Multi-transmission T42 input lists page/subpage numbers and transmission counts unless either selector is given.\n\
          When multiple entries match, renders the one with most visible non-space cells;\n\
          ties select the last match in input order. Transmissions are not merged."
     );
