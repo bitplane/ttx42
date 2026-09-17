@@ -442,7 +442,7 @@ fn parse_t42(bytes: &[u8]) -> Vec<Page> {
     let mut completed = Vec::new();
     let mut sequence = 0;
     let mut serial_mode = false;
-    for packet in bytes.chunks_exact(42) {
+    for packet in bytes.as_chunks::<42>().0 {
         let Some(a) = hamming84(packet[0]) else {
             continue;
         };
