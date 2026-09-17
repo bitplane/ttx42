@@ -129,6 +129,29 @@ fn double_height_on_last_row_has_no_bottom() {
 }
 
 #[test]
+fn every_printable_g0_character_has_a_double_height_font_glyph() {
+    for code in 0x21..=0x7f {
+        let grid = decode(&page_with_row(0, &[code]), &DecodeOptions::default());
+        let ch = grid.cell(0, 0).unwrap().ch;
+        assert!(
+            crate::saa5050::pixels(ch).is_some(),
+            "missing {code:02x}: {ch}"
+        );
+    }
+    for (code, alias) in [(0x60, '–'), (0x7f, '█')] {
+        let grid = decode(&page_with_row(0, &[0x0d, code]), &DecodeOptions::default());
+        let rendered = present(&grid, &AnsiOptions::default());
+        let expected = crate::saa5050::glyph(alias).unwrap();
+        for row in 0..2 {
+            assert_eq!(
+                rendered[row][1].glyphs,
+                expected[row].iter().collect::<String>()
+            );
+        }
+    }
+}
+
+#[test]
 fn saa5050_t_has_a_full_top_bar_and_centred_stem() {
     assert_eq!(
         crate::saa5050::pixels('T').unwrap(),

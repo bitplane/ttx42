@@ -20,6 +20,12 @@ pub(crate) fn glyph(ch: char) -> Option<[[char; 2]; 2]> {
 }
 
 pub(crate) fn pixels(ch: char) -> Option<[u8; 8]> {
+    // Match the decoder's UK G0 names to the upstream font's glyph keys.
+    let ch = match ch {
+        '—' => '–',
+        '■' => '█',
+        _ => ch,
+    };
     crate::sn8k5050::font_pixels(ch)
 }
 
