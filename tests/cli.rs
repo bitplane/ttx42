@@ -152,6 +152,38 @@ fn sniffing_recovers_truncated_captures_and_ignores_embedded_tti_records() {
 }
 
 #[test]
+fn exact_raw_lengths_take_precedence_over_tti_markers() {
+    for length in [960, 1000] {
+        for prefix in [
+            b"PN,100".as_slice(),
+            b"OL,1,HELLO",
+            b"PN,10000\nOL,1,HELLO\n",
+        ] {
+            let mut input = vec![b' '; length];
+            input[..prefix.len()].copy_from_slice(prefix);
+            let detected = run(&[], &input);
+            let raw = run(&["--format", "raw"], &input);
+            let tti = run(&["--format", "tti"], &input);
+            assert!(detected.status.success());
+            assert!(raw.status.success());
+            assert!(tti.status.success());
+            assert_eq!(detected.stdout, raw.stdout);
+            assert_ne!(detected.stdout, tti.stdout);
+        }
+    }
+    for length in [959, 961, 999, 1001] {
+        let prefix = b"PN,10000\nOL,1,HELLO\n";
+        let mut input = vec![b' '; length];
+        input[..prefix.len()].copy_from_slice(prefix);
+        let detected = run(&[], &input);
+        let explicit = run(&["--format", "tti"], &input);
+        assert!(detected.status.success());
+        assert!(explicit.status.success());
+        assert_eq!(detected.stdout, explicit.stdout);
+    }
+}
+
+#[test]
 fn version_reports_the_package_version_without_reading_input() {
     for flag in ["--version", "-V"] {
         let result = run(&[flag], b"");

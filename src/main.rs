@@ -162,6 +162,12 @@ fn parse_hex(flag: &str, value: &str) -> Result<u16, Box<dyn std::error::Error>>
 }
 
 fn sniff(bytes: &[u8]) -> Format {
+    // Raw display bytes can contain arbitrary text, including TTI record
+    // prefixes and newlines. Resolve ambiguous exact lengths as raw; callers
+    // can explicitly select TTI for text files of these lengths.
+    if matches!(bytes.len(), 960 | 1000) {
+        return Format::Raw;
+    }
     // Recognize a bounded prefix of TTI records, not PN-like bytes anywhere
     // in a binary capture. Allow text comments without commas, as the TTI
     // parser does, but stop at binary data or malformed record prefixes.
@@ -180,7 +186,7 @@ fn sniff(bytes: &[u8]) -> Format {
         .any(|line| line.starts_with(b"PN,") || line.starts_with(b"OL,"));
     if tti {
         Format::Tti
-    } else if matches!(bytes.len(), 960 | 1000) || bytes.len() < 42 {
+    } else if bytes.len() < 42 {
         Format::Raw
     } else {
         // T42 recovery accepts a trailing partial packet. Requiring an exact

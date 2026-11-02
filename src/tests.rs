@@ -405,6 +405,33 @@ fn tti_rejects_malformed_page_numbers_without_panicking() {
 }
 
 #[test]
+fn tti_rejects_invalid_subpage_suffixes_even_with_explicit_sc() {
+    for suffix in ["garbage", "10000", "+1", "01junk", "é"] {
+        for sc in ["", "SC,0001\n"] {
+            for input in [
+                format!("{sc}PN,100{suffix}\n"),
+                format!("PN,100{suffix}\n{sc}"),
+            ] {
+                assert!(matches!(
+                    Page::parse_tti(&input),
+                    Err(crate::Error::InvalidTti(message)) if message.contains("PN subpage")
+                ));
+            }
+        }
+    }
+    for (suffix, expected) in [
+        ("", None),
+        ("00", Some(0)),
+        ("01", Some(1)),
+        ("0001", Some(1)),
+        ("3f7f", Some(0x3f7f)),
+    ] {
+        let pages = Page::parse_tti(&format!("PN,100{suffix}\n")).unwrap();
+        assert_eq!(pages[0].subpage_number(), expected);
+    }
+}
+
+#[test]
 fn exact_ansi_golden_for_plain_text_page() {
     let ansi = to_ansi(
         &decode(&page_with_row(0, b"HI"), &DecodeOptions::default()),

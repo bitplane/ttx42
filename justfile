@@ -42,10 +42,14 @@ release:
     git add Cargo.toml Cargo.lock
     git commit -m "release $version"
     rollback=false
-    git tag -a "$tag" -m "$tag"
-    git push origin HEAD
-    git push origin "$tag"
-    echo "released $tag"
+    if ! bash scripts/finish-release.sh; then
+        echo "error: release commit retained; fix the error and run just release-resume" >&2
+        exit 1
+    fi
+
+# Retry tagging/pushing the current release commit without another version bump.
+release-resume:
+    bash scripts/finish-release.sh
 
 # Run the same pinned-toolchain and MSRV checks as CI.
 check:

@@ -316,7 +316,14 @@ fn parse_tti(bytes: &[u8]) -> Result<Vec<Page>, Error> {
                 page.subpage = token
                     .get(3..)
                     .filter(|value| !value.is_empty())
-                    .and_then(|value| u16::from_str_radix(value, 16).ok());
+                    .map(|suffix| {
+                        if !suffix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                            return Err(Error::InvalidTti(format!("bad PN subpage: {value}")));
+                        }
+                        u16::from_str_radix(suffix, 16)
+                            .map_err(|_| Error::InvalidTti(format!("bad PN subpage: {value}")))
+                    })
+                    .transpose()?;
                 page.subpage = leading_subpage.take().unwrap_or(page.subpage);
                 page.fasttext = leading_links.take();
                 current = Some(page);
