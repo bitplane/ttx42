@@ -212,3 +212,25 @@ fn page_selection_ignores_text_matching_its_background() {
     assert!(result.status.success());
     assert_eq!(result.stdout, run(&["--page", "100"], last).stdout);
 }
+
+#[test]
+fn tti_detection_accepts_text_comments_before_records() {
+    for input in [
+        "A comment\nPN,10001\nOL,1,HELLO\n",
+        "A longer comment before the page records\r\n\r\nPN,10001\r\nOL,1,HELLO\r\n",
+        "Comment\nDE,Description\nAnother comment\nPN,10001\nOL,1,HELLO\n",
+        "Café notes\n\tIndented comment\nOL,1,HELLO\n",
+    ] {
+        let detected = run(&[], input.as_bytes());
+        let explicit = run(&["--format", "tti"], input.as_bytes());
+        assert!(detected.status.success(), "{:?}", detected.stderr);
+        assert!(explicit.status.success());
+        assert_eq!(detected.stdout, explicit.stdout);
+    }
+    // A binary prefix must not be treated as a comment, even if it is UTF-8.
+    for prefix in [b"binary\0data\n".as_slice(), b"binary\xffdata\n"] {
+        let input = [prefix, b"PN,10001\nOL,1,HELLO\n"].concat();
+        assert!(!run(&[], &input).status.success());
+        assert!(run(&["--format", "tti"], &input).status.success());
+    }
+}

@@ -147,12 +147,18 @@ fn parse_hex(flag: &str, value: &str) -> Result<u16, Box<dyn std::error::Error>>
 
 fn sniff(bytes: &[u8]) -> Format {
     // Recognize a bounded prefix of TTI records, not PN-like bytes anywhere
-    // in a binary capture. Unknown two-letter leading records are allowed.
+    // in a binary capture. Allow text comments without commas, as the TTI
+    // parser does, but stop at binary data or malformed record prefixes.
     let prefix = &bytes[..bytes.len().min(4096)];
     let tti = prefix
         .split(|&byte| byte == b'\n')
         .filter(|line| !line.is_empty() && *line != b"\r")
         .take_while(|line| {
+            let line = line.strip_suffix(b"\r").unwrap_or(line);
+            if !line.contains(&b',') {
+                return std::str::from_utf8(line)
+                    .is_ok_and(|text| text.chars().all(|ch| !ch.is_control() || ch == '\t'));
+            }
             line.len() >= 3 && line[..2].iter().all(u8::is_ascii_uppercase) && line[2] == b','
         })
         .any(|line| line.starts_with(b"PN,") || line.starts_with(b"OL,"));
