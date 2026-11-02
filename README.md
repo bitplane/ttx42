@@ -16,8 +16,11 @@ For a complete carousel, `Service::parse_tti` retains ordered pages,
 subpages, Fasttext links and vendor records, and `Service::to_tti` writes a
 canonical CRLF TTI document. Graphical consumers can use `present` instead of
 parsing ANSI; it returns glyph spans plus colour, flash and conceal metadata.
-The authoring-side `compile_visual_row` converts styled cells into genuine
-Level 1 control-code rows and reports every display cell it had to sacrifice.
+The authoring-side `compile_visual_row` converts styled cells into teletext
+control-code rows and reports every display cell it had to sacrifice. Output
+uses Level 1 controls except when black foreground is requested: these controls
+are preserved with a compatibility warning because Level 1 receivers may ignore
+them. Black backgrounds remain compatible with Level 1.
 
 The `ttx42` command reads raw 960/1000-byte pages, MRG `.tti` files and
 42-byte packet `.t42` recoveries. It reads stdin when no file (or `-`) is
@@ -84,7 +87,8 @@ its `ttxcat` CLI by Vilcans are prior art. For browser-based authoring see
 
 ## Scope
 
-This release targets UK Level 1 pages. Level 1.5/2.5/3.5 enhancements and
+This release targets UK Level 1 pages, with support for the black-foreground
+controls standardized at Level 2.5. Other Level 1.5/2.5/3.5 enhancements and
 additional national subsets are intentionally out of scope.
 
 ## Development checks

@@ -1518,3 +1518,24 @@ fn visual_compiler_warns_for_emitted_black_foreground_controls() {
     }; 4];
     assert!(compile_visual_row(&plain).warnings.is_empty());
 }
+
+#[test]
+fn visual_compiler_returns_to_black_background_without_compatibility_warning() {
+    let mut row = [VisualCell::default(); 6];
+    for cell in &mut row[1..4] {
+        cell.bg = 4;
+    }
+    row[3].ch = b'X';
+    row[5].ch = b'Y';
+    let compiled = compile_visual_row(&row);
+    assert_eq!(&compiled.bytes[..6], &[0x04, 0x1d, 0x07, b'X', 0x1c, b'Y']);
+    assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+    let grid = decode(
+        &page_with_row(0, &compiled.bytes),
+        &DecodeOptions::default(),
+    );
+    assert_eq!(grid.cell(0, 3).unwrap().bg, 4);
+    assert_eq!(grid.cell(0, 4).unwrap().bg, 0);
+    let cell = grid.cell(0, 5).unwrap();
+    assert_eq!((cell.ch, cell.fg, cell.bg), ('Y', 7, 0));
+}

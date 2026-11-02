@@ -87,7 +87,7 @@ impl Default for State {
     }
 }
 
-/// Compile a WYSIWYG row to a real Level 1 control-code row. Attribute
+/// Compile a WYSIWYG row to teletext display bytes and spacing controls. Attribute
 /// transitions consume cells; a preceding blank is used where possible,
 /// otherwise the transition cell is sacrificed and reported. Changes to the
 /// background or height of a blank are also reported.
