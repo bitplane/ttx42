@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,20 +36,8 @@ if command.startswith('cargo check'):
 """
 
 
-def release_body(justfile):
-    """Extract only the indented body of the release recipe."""
-    lines = justfile.splitlines(keepends=True)
-    start = next(i for i, line in enumerate(lines) if line.rstrip() == "release:")
-    body = []
-    for line in lines[start + 1:]:
-        if line.strip() and not line.startswith((" ", "\t")):
-            break
-        body.append(line)
-    return textwrap.dedent("".join(body))
-
-
 class ReleaseRecipe(unittest.TestCase):
-    def exercise(self, failure="", suffix=""):
+    def exercise(self, failure="", level=None, expected=None, invalid=False, use_just=False):
         with tempfile.TemporaryDirectory(prefix="ttx42-release-") as directory:
             root = Path(directory)
             originals = {}
@@ -58,6 +45,8 @@ class ReleaseRecipe(unittest.TestCase):
                 originals[name] = (ROOT / name).read_text()
                 (root / name).write_text(originals[name])
             (root / "scripts").mkdir()
+            shutil.copyfile(ROOT / "scripts/release.sh", root / "scripts/release.sh")
+            shutil.copyfile(ROOT / "justfile", root / "justfile")
             shutil.copyfile(ROOT / "scripts/check.sh", root / "scripts/check.sh")
             shutil.copyfile(ROOT / "scripts/finish-release.sh", root / "scripts/finish-release.sh")
             (root / "tests").mkdir()
@@ -70,13 +59,22 @@ class ReleaseRecipe(unittest.TestCase):
                 executable = root / tool
                 executable.write_text(MOCK)
                 executable.chmod(0o755)
-            recipe = release_body((ROOT / "justfile").read_text() + suffix)
+            command = ["just", "release"] if use_just else ["bash", "scripts/release.sh"]
+            if level is not None:
+                command.append(level)
             result = subprocess.run(
-                ["bash", "-c", recipe], cwd=root, capture_output=True, text=True,
+                command, cwd=root, capture_output=True, text=True,
                 env={**os.environ, "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
                      "FAIL_COMMAND": failure, "RUSTUP_TOOLCHAIN": "wrong-toolchain"},
             )
             calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
+            if invalid:
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("error: release", result.stderr)
+                for name, original in originals.items():
+                    self.assertEqual((root / name).read_text(), original)
+                self.assertEqual([command for command, _ in calls], ["git status --porcelain"])
+                return
             if failure:
                 self.assertNotEqual(result.returncode, 0)
                 if failure in ("git tag", "git push"):
@@ -105,7 +103,7 @@ class ReleaseRecipe(unittest.TestCase):
                     self.assertLess(commands.index(check), validation)
                 old_version = re.search(r'^version = "(.*?)"', originals["Cargo.toml"], re.M)[1]
                 major, minor, patch = map(int, old_version.split("."))
-                new_version = f"{major}.{minor}.{patch + 1}"
+                new_version = expected or f"{major}.{minor}.{patch + 1}"
                 tag_name = f"v{new_version}"
                 self.assertEqual(
                     [command for command in commands if command.startswith("git push")],
@@ -150,8 +148,32 @@ class ReleaseRecipe(unittest.TestCase):
     def test_success_validates_before_committing_and_tagging(self):
         self.exercise()
 
-    def test_following_recipe_is_not_executed(self):
-        self.exercise(suffix="\nother:\n    exit 99\n")
+    def test_release_levels_and_explicit_version(self):
+        current = re.search(r'^version = "(.*?)"', (ROOT / "Cargo.toml").read_text(), re.M)[1]
+        major, minor, patch = map(int, current.split('.'))
+        for level, expected in [
+            ("patch", f"{major}.{minor}.{patch + 1}"),
+            ("minor", f"{major}.{minor + 1}.0"),
+            ("major", f"{major + 1}.0.0"),
+            (f"{major + 2}.3.4", f"{major + 2}.3.4"),
+        ]:
+            with self.subTest(level=level):
+                self.exercise(level=level, expected=expected)
+
+    def test_invalid_versions_stop_before_checks_or_mutations(self):
+        current = re.search(r'^version = "(.*?)"', (ROOT / "Cargo.toml").read_text(), re.M)[1]
+        for level in ["", "typo", "1.2", "01.2.3", "1.2.3-rc.1", current, "0.0.0", "$(touch injected)"]:
+            with self.subTest(level=level):
+                self.exercise(level=level, invalid=True)
+
+    @unittest.skipUnless(shutil.which("just"), "requires just")
+    def test_just_passes_default_and_explicit_arguments(self):
+        current = re.search(r'^version = "(.*?)"', (ROOT / "Cargo.toml").read_text(), re.M)[1]
+        major = int(current.split('.')[0])
+        self.exercise(use_just=True)
+        self.exercise(level="major", use_just=True,
+                      expected=f"{major + 1}.0.0")
+        self.exercise(level="$(touch injected)", invalid=True, use_just=True)
 
 
 class ReleasePush(unittest.TestCase):
