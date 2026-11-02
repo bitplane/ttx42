@@ -9,7 +9,9 @@ pub struct VisualCell {
     /// Seven-bit display code. The parity bit is ignored; control codes are
     /// replaced by spaces with a warning rather than interpreted as attributes.
     pub ch: u8,
-    /// Foreground colour index; values above 7 are clamped to 7.
+    /// Foreground colour index; values above 7 are clamped to 7. Black (0)
+    /// requires receiver support beyond Level 1 and generates a warning
+    /// when a black foreground control is emitted.
     pub fg: u8,
     /// Background colour index; values above 7 are clamped to 7.
     pub bg: u8,
@@ -41,7 +43,8 @@ impl Default for VisualCell {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// A display compromise or invalid glyph encountered while compiling a row.
+/// A display compromise, compatibility issue, or invalid glyph encountered
+/// while compiling a row.
 pub struct CompileWarning {
     /// Zero-based source column affected by the warning.
     pub column: usize,
@@ -54,7 +57,8 @@ pub struct CompileWarning {
 pub struct CompiledRow {
     /// Seven-bit display codes and spacing controls, padded with spaces.
     pub bytes: [u8; COLS],
-    /// Reported glyph substitutions, consumed text cells, and changed blank backgrounds or heights.
+    /// Reported glyph substitutions, consumed text cells, changed blank
+    /// backgrounds or heights, and controls requiring newer receivers.
     pub warnings: Vec<CompileWarning>,
 }
 
@@ -87,6 +91,10 @@ impl Default for State {
 /// transitions consume cells; a preceding blank is used where possible,
 /// otherwise the transition cell is sacrificed and reported. Changes to the
 /// background or height of a blank are also reported.
+/// Black foreground requests are preserved, but each emitted alpha/mosaic
+/// black control produces a compatibility warning at its output column:
+/// these controls require Level 2.5 support and may be ignored by Level 1
+/// receivers. Black backgrounds do not require this extension.
 ///
 /// Only the first 40 input cells are used; shorter inputs are space-padded.
 /// Padding inherits the final transmitted attributes, including background
@@ -230,6 +238,14 @@ pub fn compile_visual_row(cells: &[VisualCell]) -> CompiledRow {
         }
         if bytes[column] == 0x0d {
             double_height = true;
+        }
+    }
+    for (column, &code) in bytes.iter().enumerate() {
+        if matches!(code, 0x00 | 0x10) {
+            warnings.push(CompileWarning {
+                column,
+                message: "black foreground control requires Level 2.5 support; Level 1 receivers may ignore it".into(),
+            });
         }
     }
     CompiledRow { bytes, warnings }

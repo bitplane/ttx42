@@ -1476,3 +1476,45 @@ fn trailing_double_height_control_needs_a_following_cell_to_suppress_a_row() {
         }
     }
 }
+
+#[test]
+fn visual_compiler_warns_for_emitted_black_foreground_controls() {
+    for mosaic in [false, true] {
+        let mut row = [VisualCell::default(); 6];
+        for cell in &mut row[2..] {
+            cell.bg = 7;
+        }
+        row[5] = VisualCell {
+            ch: b'X',
+            fg: 0,
+            bg: 7,
+            mosaic,
+            ..VisualCell::default()
+        };
+        let compiled = compile_visual_row(&row);
+        assert_eq!(compiled.warnings.len(), 1);
+        let warning = &compiled.warnings[0];
+        assert_eq!(
+            compiled.bytes[warning.column],
+            if mosaic { 0x10 } else { 0x00 }
+        );
+        assert!(warning.message.contains("Level 2.5"));
+        let grid = decode(
+            &page_with_row(0, &compiled.bytes),
+            &DecodeOptions::default(),
+        );
+        let cell = grid.cell(0, 5).unwrap();
+        assert_eq!((cell.ch, cell.fg, cell.bg), ('X', 0, 7));
+    }
+    // Foreground on blank cells is unconstrained; black backgrounds are Level 1.
+    let blanks = [VisualCell {
+        fg: 0,
+        ..VisualCell::default()
+    }; 4];
+    assert!(compile_visual_row(&blanks).warnings.is_empty());
+    let plain = [VisualCell {
+        ch: b'X',
+        ..VisualCell::default()
+    }; 4];
+    assert!(compile_visual_row(&plain).warnings.is_empty());
+}
