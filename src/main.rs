@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     env, fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     process::ExitCode,
 };
 
@@ -15,8 +15,17 @@ enum Format {
 }
 
 fn main() -> ExitCode {
-    match run() {
+    let mut output = io::stdout().lock();
+    let result = run(&mut output).and_then(|()| output.flush().map_err(Into::into));
+    match result {
         Ok(()) => ExitCode::SUCCESS,
+        Err(error)
+            if error
+                .downcast_ref::<io::Error>()
+                .is_some_and(|error| error.kind() == io::ErrorKind::BrokenPipe) =>
+        {
+            ExitCode::SUCCESS
+        }
         Err(error) => {
             eprintln!("ttx42: {error}");
             ExitCode::FAILURE
@@ -24,7 +33,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run(output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
     let mut file = None;
     let mut format = None;
     let mut page_number = None;
@@ -62,11 +71,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "-V" | "--version" => {
-                println!("ttx42 {}", env!("CARGO_PKG_VERSION"));
+                writeln!(output, "ttx42 {}", env!("CARGO_PKG_VERSION"))?;
                 return Ok(());
             }
             "-h" | "--help" => {
-                usage();
+                usage(output)?;
                 return Ok(());
             }
             value if value.starts_with('-') && value != "-" => {
@@ -105,7 +114,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             *counts.entry(identity).or_insert(0usize) += 1;
         }
         for ((page, subpage), count) in counts {
-            println!("{page:03X} {subpage:04X} {count}");
+            writeln!(output, "{page:03X} {subpage:04X} {count}")?;
         }
         return Ok(());
     }
@@ -127,7 +136,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .max_by_key(|(visible, _)| *visible)
         .ok_or("requested page not found")?;
-    print!("{}", to_ansi(&grid, &AnsiOptions { separated, wide }));
+    output.write_all(to_ansi(&grid, &AnsiOptions { separated, wide }).as_bytes())?;
     Ok(())
 }
 
@@ -173,13 +182,14 @@ fn sniff(bytes: &[u8]) -> Format {
     }
 }
 
-fn usage() {
-    println!(
+fn usage(output: &mut impl Write) -> io::Result<()> {
+    writeln!(
+        output,
         "ttx42 [--version] [FILE|-] [--format raw|tti|t42] [--page HEX] [--subpage HEX] [--reveal] [--wide|--narrow] [--separated braille|contiguous|unicode16]\n\
          Reads stdin when FILE is omitted or '-'.\n\
          Raw input has no page number; omit --page for raw files.\n\
          Multi-transmission T42 input lists page/subpage numbers and transmission counts unless either selector is given.\n\
          When multiple entries match, renders the one with most visible non-space cells;\n\
          ties select the last match in input order. Transmissions are not merged."
-    );
+    )
 }

@@ -234,3 +234,59 @@ fn tti_detection_accepts_text_comments_before_records() {
         assert!(run(&["--format", "tti"], &input).status.success());
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn closed_output_exits_quietly_for_rendering_and_listings() {
+    use std::os::{fd::OwnedFd, unix::net::UnixStream};
+
+    let mut capture = Vec::new();
+    for _ in 0..2 {
+        capture.extend([0x02, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15]);
+        capture.extend([b' '; 32]);
+    }
+    for (args, input) in [
+        (
+            vec!["--format", "tti"],
+            b"PN,10000\nOL,1,HELLO\n".as_slice(),
+        ),
+        (vec!["--format", "t42"], capture.as_slice()),
+        (vec!["--help"], b"".as_slice()),
+        (vec!["--version"], b"".as_slice()),
+    ] {
+        // Close the reader before spawning: no race with the first output write.
+        let (reader, writer) = UnixStream::pair().unwrap();
+        drop(reader);
+        let stdout: OwnedFd = writer.into();
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttx42"))
+            .args(&args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::from(stdout))
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let result = child.wait_with_output().unwrap();
+        assert!(result.status.success(), "{args:?}: {:?}", result.stderr);
+        assert!(result.stderr.is_empty(), "{args:?}: {:?}", result.stderr);
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn other_output_errors_are_reported_without_panicking() {
+    let result = Command::new(env!("CARGO_BIN_EXE_ttx42"))
+        .arg("--version")
+        .stdout(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open("/dev/full")
+                .unwrap(),
+        )
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(1));
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(error.starts_with("ttx42: "), "{error}");
+    assert!(!error.contains("panicked"), "{error}");
+}
