@@ -188,3 +188,27 @@ fn t42_listing_groups_repeated_transmissions() {
     assert!(result.status.success());
     assert_eq!(result.stdout, b"100 0001 1\n100 0002 2\n");
 }
+
+#[test]
+fn page_selection_ignores_text_matching_its_background() {
+    let readable = b"PN,10000\nOL,1,HELLO\n";
+    let invisible = b"PN,10000\nOL,1,\x1b]XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
+    let expected = run(&["--page", "100"], readable);
+    assert!(expected.status.success());
+    for parts in [
+        [readable.as_slice(), invisible.as_slice()],
+        [invisible.as_slice(), readable.as_slice()],
+    ] {
+        let result = run(&["--page", "100"], &parts.concat());
+        assert!(result.status.success());
+        assert_eq!(result.stdout, expected.stdout);
+    }
+    // Equal visible scores still select the last transmission.
+    let last = b"PN,10000\nOL,1,WORLD\n";
+    let result = run(
+        &["--page", "100"],
+        &[readable.as_slice(), last.as_slice()].concat(),
+    );
+    assert!(result.status.success());
+    assert_eq!(result.stdout, run(&["--page", "100"], last).stdout);
+}

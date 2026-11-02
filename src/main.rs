@@ -121,7 +121,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .rows()
                 .iter()
                 .flatten()
-                .filter(|cell| cell.ch != ' ')
+                .filter(|cell| cell.ch != ' ' && cell.fg != cell.bg)
                 .count();
             (visible, grid)
         })
