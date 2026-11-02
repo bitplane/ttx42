@@ -290,3 +290,48 @@ fn other_output_errors_are_reported_without_panicking() {
     assert!(error.starts_with("ttx42: "), "{error}");
     assert!(!error.contains("panicked"), "{error}");
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_file_paths_render_without_panicking() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let path = std::env::temp_dir().join(OsString::from_vec(
+        format!("ttx42-non-utf8-{}-", std::process::id())
+            .bytes()
+            .chain([0xff])
+            .collect(),
+    ));
+    let input = [b' '; 1000];
+    std::fs::write(&path, input).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_ttx42"))
+        .arg(&path)
+        .output()
+        .unwrap();
+    std::fs::remove_file(&path).unwrap();
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert!(result.stderr.is_empty());
+    assert_eq!(result.stdout, run(&[], &input).stdout);
+}
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_option_values_report_errors_without_panicking() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    for flag in ["--format", "--page", "--subpage", "--separated"] {
+        let result = Command::new(env!("CARGO_BIN_EXE_ttx42"))
+            .arg(flag)
+            .arg(OsString::from_vec(vec![0xff]))
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(result.stderr).unwrap(),
+            format!("ttx42: {flag}: value must be valid UTF-8\n")
+        );
+    }
+}

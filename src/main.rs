@@ -1,6 +1,8 @@
 use std::{
     collections::BTreeMap,
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     io::{self, Read, Write},
     process::ExitCode,
 };
@@ -41,32 +43,27 @@ fn run(output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
     let mut reveal = false;
     let mut separated = SeparatedStyle::Braille;
     let mut wide = true;
-    let mut args = env::args().skip(1);
+    let mut args = env::args_os().skip(1);
     while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--format" => {
-                format = Some(parse_format(&args.next().ok_or("--format needs a value")?)?)
-            }
+        match arg.to_str().unwrap_or("") {
+            "--format" => format = Some(parse_format(&option_value(&mut args, "--format")?)?),
             "--page" => {
-                page_number = Some(parse_hex(
-                    "--page",
-                    &args.next().ok_or("--page needs a value")?,
-                )?)
+                page_number = Some(parse_hex("--page", &option_value(&mut args, "--page")?)?)
             }
             "--subpage" => {
                 subpage = Some(parse_hex(
                     "--subpage",
-                    &args.next().ok_or("--subpage needs a value")?,
+                    &option_value(&mut args, "--subpage")?,
                 )?)
             }
             "--reveal" => reveal = true,
             "--wide" => wide = true,
             "--narrow" => wide = false,
             "--separated" => {
-                separated = match args.next().as_deref() {
-                    Some("braille") => SeparatedStyle::Braille,
-                    Some("contiguous") => SeparatedStyle::Contiguous,
-                    Some("unicode16") => SeparatedStyle::Unicode16,
+                separated = match option_value(&mut args, "--separated")?.as_str() {
+                    "braille" => SeparatedStyle::Braille,
+                    "contiguous" => SeparatedStyle::Contiguous,
+                    "unicode16" => SeparatedStyle::Unicode16,
                     _ => return Err("--separated expects braille, contiguous, or unicode16".into()),
                 }
             }
@@ -78,15 +75,15 @@ fn run(output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
                 usage(output)?;
                 return Ok(());
             }
-            value if value.starts_with('-') && value != "-" => {
-                return Err(format!("unknown option: {value}").into());
+            _ if arg.as_encoded_bytes().starts_with(b"-") && arg != "-" => {
+                return Err(format!("unknown option: {}", arg.to_string_lossy()).into());
             }
-            value if file.is_none() => file = Some(value.to_owned()),
-            value => return Err(format!("unexpected argument: {value}").into()),
+            _ if file.is_none() => file = Some(arg),
+            _ => return Err(format!("unexpected argument: {}", arg.to_string_lossy()).into()),
         }
     }
-    let bytes = match file.as_deref() {
-        None | Some("-") => {
+    let bytes = match file.as_deref().filter(|path| *path != "-") {
+        None => {
             let mut bytes = Vec::new();
             io::stdin().read_to_end(&mut bytes)?;
             bytes
@@ -138,6 +135,16 @@ fn run(output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("requested page not found")?;
     output.write_all(to_ansi(&grid, &AnsiOptions { separated, wide }).as_bytes())?;
     Ok(())
+}
+
+fn option_value(
+    args: &mut impl Iterator<Item = OsString>,
+    flag: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    args.next()
+        .ok_or_else(|| format!("{flag} needs a value"))?
+        .into_string()
+        .map_err(|_| format!("{flag}: value must be valid UTF-8").into())
 }
 
 fn parse_format(value: &str) -> Result<Format, Box<dyn std::error::Error>> {
